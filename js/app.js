@@ -64,6 +64,7 @@ var App = (function () {
     switchTab('tasks');
 
     if (typeof Subjects !== 'undefined') Subjects.init();
+<<<<<<< Updated upstream
 
     // 启动时自动从云端同步
     if (typeof Sync !== 'undefined' && Sync.hasToken()) {
@@ -72,6 +73,8 @@ var App = (function () {
         if (typeof Tasks !== 'undefined') Tasks.render();
       });
     }
+=======
+>>>>>>> Stashed changes
 
     console.log('[CPA Study] 应用已启动 ✓');
   }
