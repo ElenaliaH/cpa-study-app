@@ -50,54 +50,31 @@ var App = (function () {
     }
   }
 
-  /* ---- 同步设置面板 ---- */
-  function bindSyncUI() {
-    var setupBtn  = document.getElementById('syncSetupBtn');
-    var syncNowBtn = document.getElementById('syncNowBtn');
-    var panel     = document.getElementById('syncPanel');
-    var saveBtn   = document.getElementById('syncSaveBtn');
-    var input     = document.getElementById('syncTokenInput');
+  /* ---- 同步 ---- */
+  function bindSync() {
+    var saveBtn = document.getElementById('syncSaveBtn');
+    var input   = document.getElementById('syncTokenInput');
+    if (!saveBtn || !input) return;
 
-    if (!setupBtn || !panel) return;
-
-    // 已有 token 时自动填入
+    // 已有 token 自动填入
     if (typeof Sync !== 'undefined' && Sync.hasToken()) {
-      setupBtn.textContent = '☁️ 已启用同步';
-      if (syncNowBtn) syncNowBtn.style.display = 'inline-block';
       input.value = Sync.getToken();
+      input.placeholder = '已设置 Token ✓';
     }
-
-    setupBtn.addEventListener('click', function () {
-      panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
-    });
 
     saveBtn.addEventListener('click', function () {
-      var token = input.value.trim();
-      if (!token || token.length < 10) { alert('请输入有效的 GitHub Token'); return; }
-      Sync.setToken(token);
-      panel.style.display = 'none';
-      setupBtn.textContent = '☁️ 已启用同步';
-      if (syncNowBtn) syncNowBtn.style.display = 'inline-block';
-      // 首次设置后立刻上传
+      var t = input.value.trim();
+      if (!t || t.length < 10) { alert('请输入有效的 GitHub Token'); return; }
+      Sync.setToken(t);
       Sync.upload(function (ok) {
-        alert(ok ? '✅ 同步成功！' : '⚠️ 同步失败，请检查 Token 是否正确');
+        alert(ok ? '✅ 同步成功！换手机打开网址输入同一个 Token 就能同步。' : '⚠️ 同步失败，检查网络或 Token');
       });
     });
-
-    if (syncNowBtn) {
-      syncNowBtn.addEventListener('click', function () {
-        syncNowBtn.textContent = '⏳ 同步中...';
-        Sync.upload(function (ok) {
-          syncNowBtn.textContent = '🔄 立即同步';
-          alert(ok ? '✅ 同步成功！' : '⚠️ 同步失败，请检查网络');
-        });
-      });
-    }
   }
 
   function init() {
     bindTabs();
-    bindSyncUI();
+    bindSync();
     Countdown.init();
     Tasks.init();
 
