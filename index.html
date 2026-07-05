@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CPA Study</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+  <!-- ====== 导航栏 ====== -->
+  <nav class="nav">
+    <div class="nav-top">
+      <span class="nav-brand">CPA Study</span>
+      <span class="nav-date" id="todayDate"></span>
+    </div>
+    <!-- 标签切换 -->
+    <div class="nav-tabs">
+      <button class="nav-tab active" data-tab="tasks">首页</button>
+      <button class="nav-tab" data-tab="plan">学习计划</button>
+      <button class="nav-tab" data-tab="mistakes">错题本</button>
+    </div>
+  </nav>
+
+  <!-- ====== 页面内容 ====== -->
+  <main class="container">
+
+    <!-- ──────────── 页面1：今日任务 ──────────── -->
+    <section class="page" data-page="tasks">
+
+      <!-- Hero 倒计时 -->
+      <div class="hero">
+        <p class="hero-eyebrow">距离 CPA 专业阶段考试</p>
+        <h1 class="hero-title">
+          还有 <span class="hero-title-num" id="countDays">--</span> 天
+        </h1>
+        <p class="hero-sub" id="examPhaseText">把每天的复习，整理成清晰可执行的计划。</p>
+
+        <div class="countdown-panel">
+          <div class="cd-unit">
+            <span class="cd-num" id="cdDays">--</span>
+            <span class="cd-lbl">天</span>
+          </div>
+          <div class="cd-unit">
+            <span class="cd-num" id="cdHours">--</span>
+            <span class="cd-lbl">时</span>
+          </div>
+          <div class="cd-unit">
+            <span class="cd-num" id="cdMinutes">--</span>
+            <span class="cd-lbl">分</span>
+          </div>
+          <div class="cd-unit">
+            <span class="cd-num" id="cdSeconds">--</span>
+            <span class="cd-lbl">秒</span>
+          </div>
+        </div>
+
+        <div class="date-picker-row">
+          <span class="date-picker-label">考试日期</span>
+          <input type="date" class="date-picker-input" id="examDateInput" title="修改考试日期">
+        </div>
+      </div>
+
+      <!-- 今日计划（自动生成） -->
+      <div class="section-card">
+        <div class="section-header">
+          <h2 class="section-title">今日计划</h2>
+          <span class="section-meta">根据学习轮次自动计算</span>
+        </div>
+        <div class="daily-plan-list" id="dailyPlanList"></div>
+      </div>
+
+      <!-- 手动任务（iPhone 风格） -->
+      <div class="section-card">
+        <div class="section-header">
+          <h2 class="section-title">手动任务</h2>
+          <span class="section-meta" id="taskProgressText">0 / 0 项已完成</span>
+        </div>
+
+        <div class="progress-track">
+          <div class="progress-fill" id="progressFill"></div>
+        </div>
+
+        <div class="add-row">
+          <input type="text" id="taskInput"
+                 placeholder="新提醒事项" autocomplete="off">
+          <select id="subjectSelect"></select>
+          <input type="datetime-local" id="taskDueInput"
+                 class="date-picker-input" style="max-width:160px"
+                 title="提醒时间（可选）">
+          <button class="btn btn-primary" id="btnAdd">添加</button>
+        </div>
+
+        <ul class="task-list" id="taskList"></ul>
+
+        <div id="toggleCompletedRow" style="display:none;text-align:center;margin-top:8px;">
+          <button class="btn btn-sm btn-ghost" id="toggleDoneBtn"
+                  style="font-size:13px;color:var(--text-secondary);">
+          </button>
+        </div>
+      </div>
+
+      <!-- 底部入口 -->
+      <div class="entry-row">
+        <a class="entry-mini" href="#" data-nav="plan">
+          <div class="entry-mini-title">📋 学习计划</div>
+          <div class="entry-mini-desc">打卡记录与科目管理</div>
+        </a>
+        <a class="entry-mini" href="#" data-nav="mistakes">
+          <div class="entry-mini-title">📝 错题本</div>
+          <div class="entry-mini-desc">记录与回顾错题</div>
+        </a>
+      </div>
+    </section>
+
+    <!-- ──────────── 页面2：学习计划（打卡概览 + 科目/轮次管理） ──────────── -->
+    <section class="page" data-page="plan">
+
+      <!-- 打卡概览（按科目分组） -->
+      <div class="section-card">
+        <div class="section-header">
+          <h2 class="section-title">打卡概览</h2>
+        </div>
+        <div class="cin-grid" id="checkinCards"></div>
+      </div>
+
+      <!-- 科目与轮次管理 -->
+      <div class="section-card">
+        <div class="section-header">
+          <h2 class="section-title">科目与轮次</h2>
+        </div>
+
+        <div class="add-row">
+          <input type="text" id="subjectInput"
+                 placeholder="输入科目名称，例如：税法"
+                 autocomplete="off">
+          <button class="btn btn-primary" id="subjectBtnAdd">添加科目</button>
+        </div>
+
+        <div id="subjectList"></div>
+      </div>
+    </section>
+
+    <!-- ──────────── 页面3：错题本（占位） ──────────── -->
+    <section class="page" data-page="mistakes">
+      <div class="section-card">
+        <div class="section-header">
+          <h2 class="section-title">错题本</h2>
+        </div>
+        <div class="placeholder-page">
+          <div class="placeholder-page-icon">📝</div>
+          <div class="placeholder-page-title">错题本功能即将上线</div>
+          <div class="placeholder-page-desc">
+            你可以在这里记录错题、正确答案和错误原因，<br>
+            按科目和标签分类复习。
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 数据备份 -->
+    <div class="backup-row">
+      <button class="btn btn-sm btn-ghost" onclick="Backup.exportData()">📤 导出数据</button>
+      <button class="btn btn-sm btn-ghost" onclick="Backup.importData()">📥 导入数据</button>
+    </div>
+
+    <p class="footer">CPA Study · 数据仅保存在你的浏览器中</p>
+  </main>
+
+  <!-- ====== JavaScript ====== -->
+  <!-- 休息日日历弹窗 -->
+  <div class="modal-overlay" id="restDayOverlay" style="display:none;">
+    <div class="modal-card restday-modal">
+      <p class="modal-msg" id="restDayTitle">选择休息日</p>
+      <div class="restday-month-nav">
+        <button class="btn btn-sm btn-ghost" id="rdPrevMonth">◀</button>
+        <span id="rdMonthLabel"></span>
+        <button class="btn btn-sm btn-ghost" id="rdNextMonth">▶</button>
+      </div>
+      <div class="restday-grid" id="restDayGrid"></div>
+      <div class="restday-selected" id="restDaySelected"></div>
+      <div class="modal-btns">
+        <button class="btn btn-sm btn-ghost" id="rdCancel">取消</button>
+        <button class="btn btn-sm btn-primary" id="rdConfirm">添加休息日</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 自定义确认弹窗 -->
+  <div class="modal-overlay" id="modalOverlay" style="display:none;">
+    <div class="modal-card">
+      <p class="modal-msg" id="modalMsg"></p>
+      <div class="modal-btns">
+        <button class="btn btn-sm btn-ghost" id="modalCancel">取消</button>
+        <button class="btn btn-sm btn-primary" id="modalConfirm">确定</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="js/store.js"></script>
+  <script src="js/modal.js"></script>
+  <script src="js/progress.js"></script>
+  <script src="js/backup.js"></script>
+  <script src="js/restday.js"></script>
+  <script src="js/countdown.js"></script>
+  <script src="js/tasks.js"></script>
+  <script src="js/checkin.js"></script>
+  <script src="js/subjects.js"></script>
+  <script src="js/app.js"></script>
+
+</body>
+</html>
