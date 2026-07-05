@@ -50,31 +50,14 @@ var App = (function () {
     }
   }
 
-  /* ---- 同步 ---- */
-  function bindSync() {
-    var saveBtn = document.getElementById('syncSaveBtn');
-    var input   = document.getElementById('syncTokenInput');
-    if (!saveBtn || !input) return;
-
-    // 已有 token 自动填入
-    if (typeof Sync !== 'undefined' && Sync.hasToken()) {
-      input.value = Sync.getToken();
-      input.placeholder = '已设置 Token ✓';
-    }
-
-    saveBtn.addEventListener('click', function () {
-      var t = input.value.trim();
-      if (!t || t.length < 10) { alert('请输入有效的 GitHub Token'); return; }
-      Sync.setToken(t);
-      Sync.upload(function (ok) {
-        alert(ok ? '✅ 同步成功！换手机打开网址输入同一个 Token 就能同步。' : '⚠️ 同步失败，检查网络或 Token');
-      });
-    });
-  }
-
   function init() {
     bindTabs();
-    bindSync();
+    // 自动同步（Token 已保存时）
+    if (typeof Sync !== 'undefined' && Sync.hasToken()) {
+      Sync.autoSync(function () {
+        if (typeof Tasks !== 'undefined') Tasks.render();
+      });
+    }
     Countdown.init();
     Tasks.init();
 
