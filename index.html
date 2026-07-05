@@ -168,17 +168,6 @@
       </div>
     </section>
 
-    <!-- 云同步 -->
-    <div class="sync-box">
-      <p style="font-size:13px;color:var(--text-secondary);margin-bottom:6px;">☁️ 云同步：输入 GitHub Token 后自动跨设备同步</p>
-      <div style="display:flex;gap:6px;max-width:400px;margin:0 auto;">
-        <input type="password" id="syncTokenInput" placeholder="ghp_xxx..." style="flex:1;border:1px solid var(--border);border-radius:8px;padding:8px;font-size:13px;background:var(--surface-solid);">
-        <button class="btn btn-sm btn-primary" style="white-space:nowrap;"
-          onclick="var t=document.getElementById('syncTokenInput').value.trim();if(!t||t.length<10){alert('请输入有效的 GitHub Token');return;};localStorage.setItem('cpa_sync_token',t);Sync.upload(function(o){alert(o?'✅ 同步成功！换手机打开网址输入同一个 Token 就能同步。':'⚠️ 同步失败，检查网络或 Token')});">保存并同步</button>
-      </div>
-      <p style="font-size:11px;color:var(--text-tertiary);margin-top:4px;">Token 只存本地，不上传任何人</p>
-    </div>
-
     <!-- 数据备份 -->
     <div class="backup-row">
       <button class="btn btn-sm btn-ghost" onclick="Backup.exportData()">📤 导出数据</button>
@@ -223,7 +212,6 @@
   <script src="js/progress.js"></script>
   <script src="js/backup.js"></script>
   <script src="js/restday.js"></script>
-  <script src="js/sync.js"></script>
   <script src="js/countdown.js"></script>
   <script src="js/tasks.js"></script>
   <script src="js/checkin.js"></script>

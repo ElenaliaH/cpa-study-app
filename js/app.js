@@ -52,29 +52,12 @@ var App = (function () {
 
   function init() {
     bindTabs();
-    // 自动同步（Token 已保存时）
-    if (typeof Sync !== 'undefined' && Sync.hasToken()) {
-      Sync.autoSync(function () {
-        if (typeof Tasks !== 'undefined') Tasks.render();
-      });
-    }
     Countdown.init();
     Tasks.init();
 
     switchTab('tasks');
 
     if (typeof Subjects !== 'undefined') Subjects.init();
-<<<<<<< Updated upstream
-
-    // 启动时自动从云端同步
-    if (typeof Sync !== 'undefined' && Sync.hasToken()) {
-      Sync.autoSync(function () {
-        // 同步完成后刷新首页
-        if (typeof Tasks !== 'undefined') Tasks.render();
-      });
-    }
-=======
->>>>>>> Stashed changes
 
     console.log('[CPA Study] 应用已启动 ✓');
   }

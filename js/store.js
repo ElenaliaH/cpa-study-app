@@ -89,7 +89,6 @@ var Store = (function () {
 
   function saveSubjects(list) {
     setItem(KEY_SUBJECTS, list);
-    try { if (typeof Sync !== 'undefined') Sync.scheduleUpload(); } catch (e) {}
   }
 
   /** 按 ID 查找科目，返回 { subject, index } 或 null */
@@ -357,7 +356,6 @@ var Store = (function () {
 
   function saveManualTasks(list) {
     setItem(KEY_MANUAL_TASKS, list);
-    try { if (typeof Sync !== 'undefined') Sync.scheduleUpload(); } catch (e) {}
   }
 
   function addManualTask(data) {
