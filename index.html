@@ -168,6 +168,20 @@
       </div>
     </section>
 
+    <!-- 云同步 -->
+    <div class="backup-row">
+      <button class="btn btn-sm btn-ghost" id="syncSetupBtn">☁️ 设置同步</button>
+      <button class="btn btn-sm btn-ghost" id="syncNowBtn" style="display:none">🔄 立即同步</button>
+    </div>
+    <div class="sync-panel" id="syncPanel" style="display:none;">
+      <p style="font-size:13px;color:var(--text-secondary);margin-bottom:8px;">输入 GitHub Token 启用云同步</p>
+      <div style="display:flex;gap:6px;">
+        <input type="password" id="syncTokenInput" placeholder="ghp_xxx..." style="flex:1;border:1px solid var(--border-strong);border-radius:8px;padding:8px;font-size:13px;">
+        <button class="btn btn-sm btn-primary" id="syncSaveBtn">保存</button>
+      </div>
+      <p style="font-size:11px;color:var(--text-tertiary);margin-top:6px;">Token 只存在你的浏览器里，不会上传</p>
+    </div>
+
     <!-- 数据备份 -->
     <div class="backup-row">
       <button class="btn btn-sm btn-ghost" onclick="Backup.exportData()">📤 导出数据</button>
@@ -212,6 +226,7 @@
   <script src="js/progress.js"></script>
   <script src="js/backup.js"></script>
   <script src="js/restday.js"></script>
+  <script src="js/sync.js"></script>
   <script src="js/countdown.js"></script>
   <script src="js/tasks.js"></script>
   <script src="js/checkin.js"></script>
