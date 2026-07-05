@@ -1,21 +1,23 @@
 // Service Worker — 离线缓存
 var CACHE_NAME = 'cpa-study-v1';
+var BASE = '/cpa-study-app';
 var FILES_TO_CACHE = [
-  '/',
-  '/index.html',
-  '/css/style.css',
-  '/js/store.js',
-  '/js/modal.js',
-  '/js/progress.js',
-  '/js/countdown.js',
-  '/js/tasks.js',
-  '/js/checkin.js',
-  '/js/subjects.js',
-  '/js/backup.js',
-  '/js/restday.js',
-  '/js/app.js',
-  '/manifest.json',
-  '/icon.svg'
+  BASE + '/',
+  BASE + '/index.html',
+  BASE + '/css/style.css',
+  BASE + '/js/store.js',
+  BASE + '/js/modal.js',
+  BASE + '/js/progress.js',
+  BASE + '/js/cloudbase.js',
+  BASE + '/js/countdown.js',
+  BASE + '/js/tasks.js',
+  BASE + '/js/checkin.js',
+  BASE + '/js/subjects.js',
+  BASE + '/js/backup.js',
+  BASE + '/js/restday.js',
+  BASE + '/js/app.js',
+  BASE + '/manifest.json',
+  BASE + '/icon.svg'
 ];
 
 // 安装：预缓存所有文件
