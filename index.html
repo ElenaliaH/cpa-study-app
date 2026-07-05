@@ -17,7 +17,7 @@
   <link rel="stylesheet" href="css/style.css">
 
   <!-- CloudBase SDK -->
-  <script src="https://imgcache.qq.com/qcloud/cloudbase-js-sdk/2.1.0/cloudbase.full.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@cloudbase/js-sdk@2.1.0/dist/cloudbase.full.js"></script>
 </head>
 <body>
 
@@ -243,7 +243,7 @@
   <!-- Service Worker -->
   <script>
     if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('/sw.js');
+      navigator.serviceWorker.register('/cpa-study-app/sw.js');
     }
   </script>
 
