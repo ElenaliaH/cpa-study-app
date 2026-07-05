@@ -75,10 +75,14 @@ var App = (function () {
       return;
     }
 
+    var btnLogin = document.getElementById('btnLogin');
+    if (btnLogin) { btnLogin.textContent = '登录中...'; btnLogin.disabled = true; }
     Cloud.login(user, pass, function (err) {
+      if (btnLogin) { btnLogin.textContent = '登录'; btnLogin.disabled = false; }
       if (err) {
+        console.error('[登录失败]', err);
         var el = document.getElementById('loginMsg');
-        if (el) { el.textContent = err; el.style.display = 'block'; }
+        if (el) { el.textContent = '❌ ' + err; el.style.display = 'block'; }
         return;
       }
       afterLogin();
@@ -99,10 +103,14 @@ var App = (function () {
       return;
     }
 
+    var btnReg = document.getElementById('btnReg');
+    if (btnReg) { btnReg.textContent = '注册中...'; btnReg.disabled = true; }
     Cloud.register(user, pass, function (err) {
+      if (btnReg) { btnReg.textContent = '注册'; btnReg.disabled = false; }
       if (err) {
+        console.error('[注册失败]', err);
         var el = document.getElementById('loginMsg');
-        if (el) { el.textContent = err; el.style.display = 'block'; }
+        if (el) { el.textContent = '❌ ' + err; el.style.display = 'block'; }
         return;
       }
       afterLogin();
