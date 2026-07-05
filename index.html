@@ -15,8 +15,29 @@
   <link rel="icon" href="icon.svg">
 
   <link rel="stylesheet" href="css/style.css">
+
+  <!-- CloudBase SDK -->
+  <script src="//imgcache.qq.com/qcloud/cloudbase-js-sdk/2.1.0/cloudbase.full.js"></script>
 </head>
 <body>
+
+  <!-- 登录遮罩 -->
+  <div class="modal-overlay" id="loginOverlay">
+    <div class="modal-card login-modal">
+      <p class="modal-msg" id="loginTitle">登录 CPA Study</p>
+      <div class="form-field">
+        <input type="text" id="loginUser" placeholder="用户名" autocomplete="username">
+      </div>
+      <div class="form-field">
+        <input type="password" id="loginPass" placeholder="密码" autocomplete="current-password">
+      </div>
+      <div class="modal-btns">
+        <button class="btn btn-sm btn-ghost" id="btnReg">注册</button>
+        <button class="btn btn-sm btn-primary" id="btnLogin">登录</button>
+      </div>
+      <p id="loginMsg" style="font-size:12px;color:var(--red);margin-top:8px;display:none;"></p>
+    </div>
+  </div>
 
   <!-- ====== 导航栏 ====== -->
   <nav class="nav">
@@ -208,6 +229,7 @@
   </div>
 
   <script src="js/store.js"></script>
+  <script src="js/cloudbase.js"></script>
   <script src="js/modal.js"></script>
   <script src="js/progress.js"></script>
   <script src="js/backup.js"></script>

@@ -1,11 +1,12 @@
 /* ================================================================
-   app.js — 应用入口 + 标签页路由
+   app.js — 应用入口 + 标签页路由 + CloudBase 登录
    ================================================================ */
 
 var App = (function () {
   'use strict';
 
   var activeTab = 'tasks';
+  var started = false;
 
   function switchTab(tabName) {
     activeTab = tabName;
@@ -50,16 +51,126 @@ var App = (function () {
     }
   }
 
-  function init() {
+  /* ---- 登录界面 ---- */
+  function showLogin(msg) {
+    var overlay = document.getElementById('loginOverlay');
+    if (overlay) overlay.style.display = 'flex';
+    if (msg) {
+      var el = document.getElementById('loginMsg');
+      if (el) { el.textContent = msg; el.style.display = 'block'; }
+    }
+  }
+
+  function hideLogin() {
+    var overlay = document.getElementById('loginOverlay');
+    if (overlay) overlay.style.display = 'none';
+  }
+
+  function doLogin() {
+    var user = document.getElementById('loginUser').value.trim();
+    var pass = document.getElementById('loginPass').value.trim();
+    if (!user || !pass) {
+      var el = document.getElementById('loginMsg');
+      if (el) { el.textContent = '请输入用户名和密码'; el.style.display = 'block'; }
+      return;
+    }
+
+    Cloud.login(user, pass, function (err) {
+      if (err) {
+        var el = document.getElementById('loginMsg');
+        if (el) { el.textContent = err; el.style.display = 'block'; }
+        return;
+      }
+      afterLogin();
+    });
+  }
+
+  function doRegister() {
+    var user = document.getElementById('loginUser').value.trim();
+    var pass = document.getElementById('loginPass').value.trim();
+    if (!user || !pass) {
+      var el = document.getElementById('loginMsg');
+      if (el) { el.textContent = '请输入用户名和密码'; el.style.display = 'block'; }
+      return;
+    }
+    if (pass.length < 6) {
+      var el = document.getElementById('loginMsg');
+      if (el) { el.textContent = '密码至少 6 位'; el.style.display = 'block'; }
+      return;
+    }
+
+    Cloud.register(user, pass, function (err) {
+      if (err) {
+        var el = document.getElementById('loginMsg');
+        if (el) { el.textContent = err; el.style.display = 'block'; }
+        return;
+      }
+      afterLogin();
+    });
+  }
+
+  function afterLogin() {
+    hideLogin();
+    Cloud.download(function () {
+      startApp();
+    });
+  }
+
+  function bindLogin() {
+    var btnLogin = document.getElementById('btnLogin');
+    var btnReg = document.getElementById('btnReg');
+    var inputPass = document.getElementById('loginPass');
+
+    if (btnLogin) btnLogin.addEventListener('click', doLogin);
+    if (btnReg) btnReg.addEventListener('click', doRegister);
+    if (inputPass) inputPass.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter') doLogin();
+    });
+  }
+
+  /* ---- 启动应用 ---- */
+  function startApp() {
+    if (started) return;
+    started = true;
+
     bindTabs();
     Countdown.init();
     Tasks.init();
-
     switchTab('tasks');
-
     if (typeof Subjects !== 'undefined') Subjects.init();
 
-    console.log('[CPA Study] 应用已启动 ✓');
+    // 添加登出按钮到导航栏
+    var info = Cloud.getLoginInfo();
+    var navTop = document.querySelector('.nav-top');
+    if (navTop && info) {
+      var logoutBtn = document.createElement('button');
+      logoutBtn.className = 'btn btn-sm btn-ghost';
+      logoutBtn.textContent = '登出';
+      logoutBtn.style.fontSize = '12px';
+      logoutBtn.addEventListener('click', function () {
+        Cloud.logout();
+        location.reload();
+      });
+      navTop.appendChild(logoutBtn);
+    }
+
+    console.log('[CPA Study] 已登录: ' + (info ? info.username : ''));
+  }
+
+  /* ---- 初始化 ---- */
+  function init() {
+    Cloud.init();
+    bindLogin();
+
+    if (Cloud.isLoggedIn()) {
+      // 已登录 → 直接拉云端数据
+      Cloud.download(function () {
+        startApp();
+      });
+    } else {
+      // 未登录 → 显示登录界面
+      showLogin();
+    }
   }
 
   return { init: init, switchTab: switchTab };

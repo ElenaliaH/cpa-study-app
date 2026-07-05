@@ -982,6 +982,18 @@ body {
   text-align: center;
 }
 
+.login-modal .form-field { margin-bottom: 10px; }
+.login-modal .form-field input {
+  width: 100%; border: 1px solid var(--border-strong);
+  background: var(--surface-solid); padding: 10px 14px;
+  border-radius: 10px; font-size: 15px; font-family: var(--font);
+  color: var(--text); outline: none;
+}
+.login-modal .form-field input:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(94,92,230,.10);
+}
+
 .modal-msg {
   font-size: 15px; color: var(--text);
   margin-bottom: 20px; line-height: 1.5;
