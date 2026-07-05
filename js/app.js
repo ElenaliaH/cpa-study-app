@@ -170,6 +170,12 @@ var App = (function () {
     Cloud.init();
     bindLogin();
 
+    // 显示 SDK 诊断状态
+    var diag = Cloud.diag();
+    var el = document.getElementById('loginMsg');
+    if (el && diag.indexOf('❌') === 0) { el.textContent = diag; el.style.display = 'block'; }
+    else if (el && diag.indexOf('✅') === 0) { el.textContent = diag; el.style.display = 'block'; el.style.color = 'var(--green)'; }
+
     if (Cloud.isLoggedIn()) {
       // 已登录 → 直接拉云端数据
       Cloud.download(function () {

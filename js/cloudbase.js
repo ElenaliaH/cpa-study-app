@@ -52,6 +52,18 @@ var Cloud = (function () {
   }
 
   /* ---- 注册 ---- */
+  /* ---- SDK 状态检测（前台可见）---- */
+  function diag() {
+    if (typeof cloudbase === 'undefined') return '❌ CloudBase SDK 未加载，网络问题';
+    try {
+      var test = cloudbase.init({ env: ENV_ID });
+      if (!test) return '❌ 初始化返回空';
+      return '✅ SDK 正常, EnvId: ' + ENV_ID;
+    } catch (e) {
+      return '❌ 初始化出错: ' + (e.message || e);
+    }
+  }
+
   function register(username, password, callback) {
     if (!init()) {
       if (callback) callback('CloudBase SDK 初始化失败，请检查网络');
@@ -182,6 +194,7 @@ var Cloud = (function () {
   }
 
   return {
+    diag: diag,
     init: init, isLoggedIn: isLoggedIn, getLoginInfo: getLoginInfo,
     register: register, login: login, logout: logout,
     upload: upload, download: download, scheduleUpload: scheduleUpload
