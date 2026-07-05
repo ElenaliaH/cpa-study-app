@@ -1,0 +1,18 @@
+{
+  "name": "CPA Study",
+  "short_name": "CPA Study",
+  "description": "CPA 备考学习打卡工具",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f5f5f7",
+  "theme_color": "#5e5ce6",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
