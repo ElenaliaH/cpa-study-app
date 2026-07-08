@@ -207,6 +207,7 @@ body {
   transition: border-color .15s;
 }
 .add-row select:focus { border-color: var(--accent); }
+.task-due-input { max-width: 160px; }
 
 /* ============================================================
    按钮
@@ -1076,5 +1077,5 @@ body {
   .mtask-ops { flex-direction: column; }
   .restday-grid .rd-day { max-width: 32px; max-height: 32px; font-size: 12px; }
   .add-row { flex-wrap: wrap; }
-  .add-row input[type="datetime-local"] { max-width: none !important; flex: 1; min-width: 130px; }
+  .task-due-input { max-width: none !important; flex: 1; min-width: 140px; }
 }
