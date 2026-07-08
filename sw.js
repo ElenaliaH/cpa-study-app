@@ -5,6 +5,7 @@ var FILES_TO_CACHE = [
   BASE + '/',
   BASE + '/index.html',
   BASE + '/css/style.css',
+  BASE + '/js/vendor/supabase.js',
   BASE + '/js/store.js',
   BASE + '/js/modal.js',
   BASE + '/js/progress.js',
