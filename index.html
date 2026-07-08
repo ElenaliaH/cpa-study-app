@@ -16,8 +16,8 @@
 
   <link rel="stylesheet" href="css/style.css">
 
-  <!-- CloudBase SDK（本地） -->
-  <script src="js/vendor/cloudbase.full.js"></script>
+  <!-- Supabase SDK（本地构建） -->
+  <script src="js/vendor/supabase.js"></script>
 </head>
 <body>
 
@@ -26,14 +26,14 @@
     <div class="modal-card login-modal">
       <p class="modal-msg" id="loginTitle">登录 CPA Study</p>
       <div class="form-field">
-        <input type="text" id="loginUser" placeholder="用户名" autocomplete="username">
+        <input type="email" id="loginUser" placeholder="邮箱地址" autocomplete="email">
       </div>
       <div class="form-field">
         <input type="password" id="loginPass" placeholder="密码" autocomplete="current-password">
       </div>
       <div class="modal-btns">
-        <button class="btn btn-sm btn-ghost" id="btnReg">注册</button>
-        <button class="btn btn-sm btn-primary" id="btnLogin">登录</button>
+        <button class="btn btn-sm btn-primary" id="btnLogin" type="button"
+          onclick="var u=document.getElementById('loginUser').value.trim();var p=document.getElementById('loginPass').value.trim();var b=this;if(!u||!p){alert('请输入邮箱和密码');return;}b.textContent='登录中...';SupabaseStorage.login(u,p,function(e){b.textContent='登录';if(e){alert(e);return;}window.afterLogin();});">登录</button>
       </div>
       <p id="loginMsg" style="font-size:12px;color:var(--red);margin-top:8px;display:none;"></p>
     </div>
@@ -229,7 +229,8 @@
   </div>
 
   <script src="js/store.js"></script>
-  <script src="js/cloudbase.js"></script>
+  <script src="js/supabaseClient.js"></script>
+  <script src="js/supabaseStorage.js"></script>
   <script src="js/modal.js"></script>
   <script src="js/progress.js"></script>
   <script src="js/backup.js"></script>

@@ -89,7 +89,7 @@ var Store = (function () {
 
   function saveSubjects(list) {
     setItem(KEY_SUBJECTS, list);
-    try { if (typeof Cloud !== 'undefined') Cloud.scheduleUpload(); } catch (e) {}
+    try { if (typeof SupabaseStorage !== 'undefined') SupabaseStorage.scheduleUpload(); } catch (e) {}
   }
 
   /** 按 ID 查找科目，返回 { subject, index } 或 null */
@@ -357,7 +357,7 @@ var Store = (function () {
 
   function saveManualTasks(list) {
     setItem(KEY_MANUAL_TASKS, list);
-    try { if (typeof Cloud !== 'undefined') Cloud.scheduleUpload(); } catch (e) {}
+    try { if (typeof SupabaseStorage !== 'undefined') SupabaseStorage.scheduleUpload(); } catch (e) {}
   }
 
   function addManualTask(data) {

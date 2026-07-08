@@ -1,5 +1,5 @@
 /* ================================================================
-   app.js — 应用入口 + 标签页路由 + CloudBase 登录
+   app.js — 应用入口 + 标签页路由 + Supabase 登录
    ================================================================ */
 
 var App = (function () {
@@ -51,95 +51,12 @@ var App = (function () {
     }
   }
 
-  /* ---- 登录界面 ---- */
-  function showLogin(msg) {
-    var overlay = document.getElementById('loginOverlay');
-    if (overlay) overlay.style.display = 'flex';
-    if (msg) {
-      var el = document.getElementById('loginMsg');
-      if (el) { el.textContent = msg; el.style.display = 'block'; }
-    }
-  }
-
-  function hideLogin() {
-    var overlay = document.getElementById('loginOverlay');
-    if (overlay) overlay.style.display = 'none';
-  }
-
-  function doLogin() {
-    var user = document.getElementById('loginUser').value.trim();
-    var pass = document.getElementById('loginPass').value.trim();
-    if (!user || !pass) {
-      var el = document.getElementById('loginMsg');
-      if (el) { el.textContent = '请输入用户名和密码'; el.style.display = 'block'; }
-      return;
-    }
-
-    var btnLogin = document.getElementById('btnLogin');
-    if (btnLogin) { btnLogin.textContent = '登录中...'; btnLogin.disabled = true; }
-    Cloud.login(user, pass, function (err) {
-      if (btnLogin) { btnLogin.textContent = '登录'; btnLogin.disabled = false; }
-      if (err) {
-        console.error('[登录失败]', err);
-        var el = document.getElementById('loginMsg');
-        if (el) { el.textContent = '❌ ' + err; el.style.display = 'block'; }
-        return;
-      }
-      afterLogin();
-    });
-  }
-
-  function doRegister() {
-    var user = document.getElementById('loginUser').value.trim();
-    var pass = document.getElementById('loginPass').value.trim();
-    if (!user || !pass) {
-      var el = document.getElementById('loginMsg');
-      if (el) { el.textContent = '请输入用户名和密码'; el.style.display = 'block'; }
-      return;
-    }
-    if (pass.length < 6) {
-      var el = document.getElementById('loginMsg');
-      if (el) { el.textContent = '密码至少 6 位'; el.style.display = 'block'; }
-      return;
-    }
-
-    var btnReg = document.getElementById('btnReg');
-    if (btnReg) { btnReg.textContent = '注册中...'; btnReg.disabled = true; }
-    Cloud.register(user, pass, function (err) {
-      if (btnReg) { btnReg.textContent = '注册'; btnReg.disabled = false; }
-      if (err) {
-        console.error('[注册失败]', err);
-        var el = document.getElementById('loginMsg');
-        if (el) { el.textContent = '❌ ' + err; el.style.display = 'block'; }
-        return;
-      }
-      afterLogin();
-    });
-  }
-
-  function afterLogin() {
-    hideLogin();
-    Cloud.download(function () {
-      startApp();
-    });
-  }
-
-  function bindLogin() {
-    var btnLogin = document.getElementById('btnLogin');
-    var btnReg = document.getElementById('btnReg');
-    var inputPass = document.getElementById('loginPass');
-
-    if (btnLogin) btnLogin.addEventListener('click', doLogin);
-    if (btnReg) btnReg.addEventListener('click', doRegister);
-    if (inputPass) inputPass.addEventListener('keydown', function (e) {
-      if (e.key === 'Enter') doLogin();
-    });
-  }
-
-  /* ---- 启动应用 ---- */
   function startApp() {
     if (started) return;
     started = true;
+
+    var overlay = document.getElementById('loginOverlay');
+    if (overlay) overlay.style.display = 'none';
 
     bindTabs();
     Countdown.init();
@@ -147,45 +64,41 @@ var App = (function () {
     switchTab('tasks');
     if (typeof Subjects !== 'undefined') Subjects.init();
 
-    // 添加登出按钮到导航栏
-    var info = Cloud.getLoginInfo();
     var navTop = document.querySelector('.nav-top');
-    if (navTop && info) {
+    if (navTop) {
       var logoutBtn = document.createElement('button');
       logoutBtn.className = 'btn btn-sm btn-ghost';
       logoutBtn.textContent = '登出';
       logoutBtn.style.fontSize = '12px';
       logoutBtn.addEventListener('click', function () {
-        Cloud.logout();
-        location.reload();
+        SupabaseStorage.logout(function () { location.reload(); });
       });
       navTop.appendChild(logoutBtn);
     }
 
-    console.log('[CPA Study] 已登录: ' + (info ? info.username : ''));
+    console.log('[CPA Study] 已启动 ✓');
   }
 
-  /* ---- 初始化 ---- */
   function init() {
-    Cloud.init();
-    bindLogin();
-
-    // 显示 SDK 诊断状态
-    var diag = Cloud.diag();
-    var el = document.getElementById('loginMsg');
-    if (el && diag.indexOf('❌') === 0) { el.textContent = diag; el.style.display = 'block'; }
-    else if (el && diag.indexOf('✅') === 0) { el.textContent = diag; el.style.display = 'block'; el.style.color = 'var(--green)'; }
-
-    if (Cloud.isLoggedIn()) {
-      // 已登录 → 直接拉云端数据
-      Cloud.download(function () {
-        startApp();
-      });
-    } else {
-      // 未登录 → 显示登录界面
-      showLogin();
-    }
+    SupabaseStorage.refreshSession(function () {
+      if (SupabaseStorage.isLoggedIn()) {
+        SupabaseStorage.loadAppData(function (data) {
+          SupabaseStorage.applyDataToStore(data);
+          startApp();
+        });
+      } else {
+        var overlay = document.getElementById('loginOverlay');
+        if (overlay) overlay.style.display = 'flex';
+      }
+    });
   }
+
+  window.afterLogin = function () {
+    SupabaseStorage.loadAppData(function (data) {
+      SupabaseStorage.applyDataToStore(data);
+      startApp();
+    });
+  };
 
   return { init: init, switchTab: switchTab };
 })();

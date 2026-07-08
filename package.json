@@ -1,0 +1,12 @@
+{
+  "name": "cpa-study-app",
+  "version": "1.0.0",
+  "scripts": {
+    "build:cloudbase": "esbuild tools/cloudbase-shim.js --bundle --format=iife --outfile=js/vendor/cloudbase.full.js"
+  },
+  "devDependencies": {
+    "@cloudbase/js-sdk": "^3.6.2",
+    "@supabase/supabase-js": "^2.110.1",
+    "esbuild": "^0.28.1"
+  }
+}

@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CloudBase 登录测试</title>
+<style>
+  body { font-family: -apple-system, sans-serif; max-width: 500px; margin: 40px auto; padding: 20px; background: #f5f5f7; }
+  h2 { color: #1d1d1f; }
+  .card { background: #fff; border-radius: 12px; padding: 20px; margin: 12px 0; border: 1px solid #e5e5ea; }
+  .ok { color: #34c759; } .fail { color: #ff3b30; }
+  input { width: 100%; padding: 10px; margin: 6px 0; border: 1px solid #ddd; border-radius: 8px; font-size: 16px; }
+  button { width: 100%; padding: 12px; background: #5e5ce6; color: #fff; border: none; border-radius: 10px; font-size: 16px; margin-top: 8px; }
+  pre { background: #1d1d1f; color: #0f0; padding: 12px; border-radius: 8px; font-size: 12px; overflow-x: auto; white-space: pre-wrap; word-break: break-all; max-height: 500px; overflow-y: auto; }
+</style>
+</head>
+<body>
+
+<h2>CloudBase 登录测试</h2>
+
+<div class="card">
+  <strong>SDK 状态：</strong><span id="sdkStatus">检测中...</span>
+  <br><strong>EnvId：</strong><span id="envId"></span>
+  <br><strong>Auth 方法：</strong><span id="authMethods"></span>
+</div>
+
+<div class="card">
+  <input type="text" id="username" placeholder="用户名" autocomplete="username">
+  <input type="password" id="password" placeholder="密码" autocomplete="current-password">
+  <button onclick="doLogin()">登录</button>
+  <button onclick="checkState()" style="background:#888;margin-top:4px;">检查当前状态</button>
+</div>
+
+<div class="card">
+  <strong>结果：</strong>
+  <pre id="result">等待操作...</pre>
+</div>
+
+<script src="js/vendor/cloudbase.full.js"></script>
+<script>
+var ENV_ID = 'cpa-study-app-d2gy7e9q32c4d77a6';
+var REGION = 'ap-shanghai';
+var app, auth;
+
+function log(msg, isError) {
+  var el = document.getElementById('result');
+  el.textContent += '\n' + (isError ? '[ERROR] ' : '[INFO] ') + msg;
+  if (isError) console.error('[CloudTest]', msg);
+  else console.log('[CloudTest]', msg);
+}
+
+// 初始化
+if (typeof cloudbase === 'undefined') {
+  document.getElementById('sdkStatus').innerHTML = '<span class="fail">❌ SDK 未加载</span>';
+  log('SDK 未加载！', true);
+} else {
+  document.getElementById('sdkStatus').innerHTML = '<span class="ok">✅ 已加载</span>';
+  document.getElementById('envId').textContent = ENV_ID + ' (region: ' + REGION + ')';
+
+  app = cloudbase.init({ env: ENV_ID, region: REGION });
+  auth = app.auth({ persistence: 'local' });
+
+  var methods = [];
+  for (var k in auth) { if (typeof auth[k] === 'function') methods.push(k); }
+  document.getElementById('authMethods').textContent = methods.join(', ');
+  log('初始化完成，可用方法: ' + methods.join(', '));
+}
+
+function checkState() {
+  document.getElementById('result').textContent = '';
+  log('=== 检查登录状态 ===');
+
+  // 1. hasLoginState
+  try {
+    var hls = auth.hasLoginState();
+    log('hasLoginState(): ' + JSON.stringify(hls));
+  } catch(e) { log('hasLoginState 报错: ' + e.message, true); }
+
+  // 2. currentUser
+  try {
+    log('currentUser: ' + JSON.stringify(auth.currentUser));
+  } catch(e) { log('currentUser 报错: ' + e.message, true); }
+
+  // 3. getLoginState (可能是异步)
+  if (typeof auth.getLoginState === 'function') {
+    auth.getLoginState()
+      .then(function(ls) {
+        log('getLoginState() 返回: ' + JSON.stringify(ls));
+        if (ls && ls.user) log('✅ 已登录, uid: ' + ls.user.uid);
+        else log('未登录');
+      })
+      .catch(function(e) {
+        log('getLoginState 报错: ' + (e.message || JSON.stringify(e)), true);
+      });
+  } else {
+    log('auth.getLoginState 方法不存在');
+  }
+}
+
+function doLogin() {
+  var u = document.getElementById('username').value.trim();
+  var p = document.getElementById('password').value.trim();
+  if (!u || !p) { log('请输入用户名和密码', true); return; }
+
+  document.getElementById('result').textContent = '';
+  log('=== 登录测试: ' + u + ' ===');
+
+  // 格式1: (username, password)
+  log('尝试 signInWithPassword(username, password)');
+  auth.signInWithPassword(u, p)
+    .then(function(result) {
+      log('--- 返回成功(result) ---');
+      log(JSON.stringify(result, null, 2).substring(0, 800));
+      console.log('登录返回 result:', JSON.stringify(result));
+      // 单独打印关键字段
+      if (result.error) {
+        var hint = result.error.loginMethodHint || '';
+        alert('loginMethodHint:\n' + hint + '\n\nhelpMessage:\n' + (result.error.helpMessage || '').substring(0, 500));
+        log('--- 错误详情 ---');
+        log('code: ' + result.error.code);
+        log('loginMethodHint: ' + hint);
+      }
+
+      // 检查多种登录状态
+      log('--- 状态检查 ---');
+      log('result.user: ' + JSON.stringify(result.user));
+      log('result.data: ' + JSON.stringify(result.data));
+      log('result.error: ' + JSON.stringify(result.error));
+      log('auth.currentUser: ' + JSON.stringify(auth.currentUser));
+      log('auth.hasLoginState(): ' + JSON.stringify(auth.hasLoginState()));
+
+      if (typeof auth.getLoginState === 'function') {
+        auth.getLoginState().then(function(ls) {
+          log('auth.getLoginState(): ' + JSON.stringify(ls));
+          if ((ls && ls.user) || (result && result.user) || auth.hasLoginState()) {
+            log('✅ 判断：登录成功！');
+          } else {
+            log('登录请求成功但未获取到用户状态');
+          }
+        });
+      } else {
+        if (result && result.user && !result.error) {
+          log('✅ 判断：登录成功！');
+        } else {
+          log('⚠️ 登录返回 user=null，但请求未报错');
+        }
+      }
+    })
+    .catch(function(err) {
+      log('--- signInWithPassword 抛出异常 ---', true);
+      var errStr = '';
+      for (var k in err) { try { errStr += k + ': ' + JSON.stringify(err[k]) + '\n'; } catch(e) {} }
+      log(errStr, true);
+      console.log('登录错误:', err);
+
+      // 尝试格式2
+      log('--- 尝试对象参数 { username, password } ---');
+      auth.signInWithPassword({ username: u, password: p })
+        .then(function(r2) {
+          log('格式2 返回: ' + JSON.stringify(r2, null, 2));
+          console.log('格式2 result:', r2);
+        })
+        .catch(function(e2) {
+          log('格式2 也失败:', true);
+          var s = '';
+          for (var k in e2) { try { s += k + ': ' + JSON.stringify(e2[k]) + '\n'; } catch(e) {} }
+          log(s, true);
+        });
+    });
+}
+</script>
+
+</body>
+</html>
