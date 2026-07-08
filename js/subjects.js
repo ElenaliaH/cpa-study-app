@@ -112,6 +112,7 @@ var Subjects = (function () {
         Store.updateSubject(subj.id, newName.trim());
         render();
         if (typeof Tasks !== 'undefined') Tasks.render();
+        if (typeof Checkin !== 'undefined') Checkin.render();
       }
     });
     actions.appendChild(editBtn);
@@ -127,6 +128,7 @@ var Subjects = (function () {
         Store.deleteSubject(subj.id);
         render();
         if (typeof Tasks !== 'undefined') Tasks.render();
+        if (typeof Checkin !== 'undefined') Checkin.render();
       });
     });
     actions.appendChild(delBtn);
@@ -233,6 +235,7 @@ var Subjects = (function () {
         Store.deleteRound(subjectId, round.id);
         render();
         if (typeof Tasks !== 'undefined') Tasks.render();
+        if (typeof Checkin !== 'undefined') Checkin.render();
       });
     });
     topActions.appendChild(delRoundBtn);
@@ -751,6 +754,7 @@ var Subjects = (function () {
     els.input.value = '';
     render();
     if (typeof Tasks !== 'undefined') Tasks.render();
+    if (typeof Checkin !== 'undefined') Checkin.render();
   }
 
   /* ---- 事件绑定 ---- */
