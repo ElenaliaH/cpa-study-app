@@ -60,6 +60,7 @@ var Store = (function () {
 
   function setExamDate(dateStr) {
     localStorage.setItem(KEY_EXAM_DATE, dateStr);
+    try { if (typeof SupabaseStorage !== 'undefined' && !SupabaseStorage.shouldSkipUpload()) SupabaseStorage.scheduleUpload(); } catch (e) {}
   }
 
   /* ========== 2. 科目（含轮次和打卡）========== */
@@ -89,7 +90,7 @@ var Store = (function () {
 
   function saveSubjects(list) {
     setItem(KEY_SUBJECTS, list);
-    try { if (typeof SupabaseStorage !== 'undefined') SupabaseStorage.scheduleUpload(); } catch (e) {}
+    try { if (typeof SupabaseStorage !== 'undefined' && !SupabaseStorage.shouldSkipUpload()) SupabaseStorage.scheduleUpload(); } catch (e) {}
   }
 
   /** 按 ID 查找科目，返回 { subject, index } 或 null */
@@ -357,7 +358,7 @@ var Store = (function () {
 
   function saveManualTasks(list) {
     setItem(KEY_MANUAL_TASKS, list);
-    try { if (typeof SupabaseStorage !== 'undefined') SupabaseStorage.scheduleUpload(); } catch (e) {}
+    try { if (typeof SupabaseStorage !== 'undefined' && !SupabaseStorage.shouldSkipUpload()) SupabaseStorage.scheduleUpload(); } catch (e) {}
   }
 
   function addManualTask(data) {
@@ -548,7 +549,10 @@ var Store = (function () {
   /* ========== 4. 错题本 ========== */
 
   function getMistakes()    { return getItem(KEY_MISTAKES, []); }
-  function saveMistakes(list){ setItem(KEY_MISTAKES, list); }
+  function saveMistakes(list){
+    setItem(KEY_MISTAKES, list);
+    try { if (typeof SupabaseStorage !== 'undefined' && !SupabaseStorage.shouldSkipUpload()) SupabaseStorage.scheduleUpload(); } catch (e) {}
+  }
 
   /* ========== 暴露接口 ========== */
   return {
