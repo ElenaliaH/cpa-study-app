@@ -21,6 +21,7 @@ var SupabaseStorage = (function () {
       subjects: [],
       manualTasks: [],
       mistakes: [],
+      focus_sessions: [],
       clientUpdatedAt: nowIso(),
       schemaVersion: 2
     };
@@ -32,6 +33,7 @@ var SupabaseStorage = (function () {
     if (!Array.isArray(data.subjects)) data.subjects = [];
     if (!Array.isArray(data.manualTasks)) data.manualTasks = [];
     if (!Array.isArray(data.mistakes)) data.mistakes = [];
+    if (!Array.isArray(data.focus_sessions)) data.focus_sessions = [];
     data.schemaVersion = data.schemaVersion || 2;
     if (touch) data.clientUpdatedAt = nowIso();
     return data;
@@ -174,6 +176,7 @@ var SupabaseStorage = (function () {
       subjects: Store.getSubjects(),
       manualTasks: Store.getManualTasks(),
       mistakes: Store.getMistakes(),
+      focus_sessions: Store.getFocusSessions ? Store.getFocusSessions() : [],
       clientUpdatedAt: nowIso(),
       schemaVersion: 2
     };
@@ -188,6 +191,7 @@ var SupabaseStorage = (function () {
       if (data.subjects) Store.saveSubjects(data.subjects);
       if (data.manualTasks) Store.saveManualTasks(data.manualTasks);
       if (data.mistakes) Store.saveMistakes(data.mistakes);
+      if (data.focus_sessions && Store.saveFocusSessions) Store.saveFocusSessions(data.focus_sessions);
       saveLocalData(data);
     } finally {
       applyingRemoteData = false;

@@ -11,6 +11,7 @@ var Store = (function () {
   var KEY_TASKS        = 'cpa_tasks';
   var KEY_MANUAL_TASKS = 'cpa_manual_tasks';
   var KEY_MISTAKES     = 'cpa_mistakes';
+  var KEY_FOCUS_SESSIONS = 'cpa_focus_sessions';
 
   var DEFAULT_EXAM_DATE = '2026-08-23';
 
@@ -506,7 +507,8 @@ var Store = (function () {
       examDate: getExamDate(),
       subjects: getSubjects(),
       manualTasks: getManualTasks(),
-      mistakes: getMistakes()
+      mistakes: getMistakes(),
+      focus_sessions: getFocusSessions()
     };
   }
 
@@ -515,6 +517,7 @@ var Store = (function () {
     if (!json.subjects || !Array.isArray(json.subjects)) return '数据缺少 subjects 字段或格式不正确';
     if (!json.manualTasks || !Array.isArray(json.manualTasks)) json.manualTasks = [];
     if (!json.mistakes || !Array.isArray(json.mistakes)) json.mistakes = [];
+    if (!json.focus_sessions || !Array.isArray(json.focus_sessions)) json.focus_sessions = [];
     return null; // null = 校验通过
   }
 
@@ -543,6 +546,7 @@ var Store = (function () {
     setItem(KEY_SUBJECTS, subjects);
     setItem(KEY_MANUAL_TASKS, json.manualTasks || []);
     setItem(KEY_MISTAKES, json.mistakes || []);
+    setItem(KEY_FOCUS_SESSIONS, (json.focus_sessions || []).map(normalizeFocusSession));
     return null;
   }
 
@@ -555,6 +559,63 @@ var Store = (function () {
   }
 
   /* ========== 暴露接口 ========== */
+
+  /* ========== 5. Focus sessions ========== */
+
+  function normalizeFocusSession(s) {
+    s = s || {};
+    return {
+      id: s.id || uid('fs'),
+      user_id: s.user_id || '',
+      date: s.date || today(),
+      subject_id: s.subject_id || s.subjectId || '',
+      planned_minutes: Number(s.planned_minutes || s.plannedMinutes || 0),
+      actual_minutes: Number(s.actual_minutes || s.actualMinutes || 0),
+      status: s.status || 'completed',
+      source: s.source || 'focus_timer',
+      created_at: s.created_at || s.createdAt || new Date().toISOString()
+    };
+  }
+
+  function getFocusSessions() {
+    var list = getItem(KEY_FOCUS_SESSIONS, []);
+    if (!Array.isArray(list)) list = [];
+    for (var i = 0; i < list.length; i++) list[i] = normalizeFocusSession(list[i]);
+    return list;
+  }
+
+  function saveFocusSessions(list) {
+    setItem(KEY_FOCUS_SESSIONS, (list || []).map(normalizeFocusSession));
+    try { if (typeof SupabaseStorage !== 'undefined' && !SupabaseStorage.shouldSkipUpload()) SupabaseStorage.scheduleUpload(); } catch (e) {}
+  }
+
+  function addFocusSession(data) {
+    var list = getFocusSessions();
+    var session = normalizeFocusSession(data);
+    list.unshift(session);
+    saveFocusSessions(list);
+    return session;
+  }
+
+  function updateFocusSession(sessionId, data) {
+    var list = getFocusSessions();
+    for (var i = 0; i < list.length; i++) {
+      if (list[i].id === sessionId) {
+        if (data.date !== undefined) list[i].date = data.date;
+        if (data.subject_id !== undefined) list[i].subject_id = data.subject_id;
+        if (data.planned_minutes !== undefined) list[i].planned_minutes = Number(data.planned_minutes || 0);
+        if (data.actual_minutes !== undefined) list[i].actual_minutes = Number(data.actual_minutes || 0);
+        if (data.status !== undefined) list[i].status = data.status;
+        break;
+      }
+    }
+    saveFocusSessions(list);
+  }
+
+  function deleteFocusSession(sessionId) {
+    var list = getFocusSessions();
+    saveFocusSessions(list.filter(function (s) { return s.id !== sessionId; }));
+  }
   return {
     uid: uid, today: today,
 
@@ -599,6 +660,12 @@ var Store = (function () {
     validateImportData: validateImportData,
 
     getMistakes:   getMistakes,
-    saveMistakes:  saveMistakes
+    saveMistakes:  saveMistakes,
+
+    getFocusSessions: getFocusSessions,
+    saveFocusSessions: saveFocusSessions,
+    addFocusSession: addFocusSession,
+    updateFocusSession: updateFocusSession,
+    deleteFocusSession: deleteFocusSession
   };
 })();

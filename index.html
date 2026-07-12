@@ -93,6 +93,31 @@
       </div>
 
       <!-- 今日计划（自动生成） -->
+
+      <div class="section-card focus-card">
+        <div class="section-header">
+          <h2 class="section-title">开始学习</h2>
+          <span class="section-meta">快速记录真实学习时间</span>
+        </div>
+        <div class="focus-start-row" id="focusStartRow">
+          <button class="focus-start-btn" type="button" data-minutes="25">
+            <span class="focus-start-num">25</span>
+            <span class="focus-start-label">分钟</span>
+          </button>
+          <button class="focus-start-btn" type="button" data-minutes="45">
+            <span class="focus-start-num">45</span>
+            <span class="focus-start-label">分钟</span>
+          </button>
+        </div>
+        <div class="focus-timer-panel" id="focusTimerPanel" style="display:none;">
+          <div class="focus-subject-line">正在学习：<b id="focusSubjectName">--</b></div>
+          <button class="focus-timer-area" id="focusTimerArea" type="button" title="短按暂停/继续，长按结束">
+            <span class="focus-time" id="focusTimeLeft">25:00</span>
+            <span class="focus-state" id="focusStateText">计时中</span>
+          </button>
+          <button class="focus-end-link" id="focusEndBtn" type="button">结束学习</button>
+        </div>
+      </div>
       <div class="section-card">
         <div class="section-header">
           <h2 class="section-title">今日计划</h2>
@@ -147,8 +172,15 @@
     <!-- ──────────── 页面2：学习计划（打卡概览 + 科目/轮次管理） ──────────── -->
     <section class="page" data-page="plan">
 
+      <div class="section-card focus-overview-card">
+        <div class="section-header">
+          <h2 class="section-title">学习时长概览</h2>
+        </div>
+        <div id="focusOverview"></div>
+      </div>
+
       <!-- 打卡概览（按科目分组） -->
-      <div class="section-card">
+<div class="section-card">
         <div class="section-header">
           <h2 class="section-title">打卡概览</h2>
         </div>
@@ -170,6 +202,19 @@
 
         <div id="subjectList"></div>
       </div>
+
+<div class="section-card focus-summary-card">
+        <div class="section-header">
+          <h2 class="section-title">学习摘要</h2>
+          <span class="section-meta">复制给 GPT 调整明日计划</span>
+        </div>
+        <div class="summary-actions">
+          <button class="btn btn-sm btn-primary" id="btnGenerateSummary" type="button">生成今日学习摘要</button>
+          <button class="btn btn-sm btn-ghost" id="btnCopySummary" type="button">复制给GPT分析</button>
+        </div>
+        <textarea class="summary-output" id="focusSummaryOutput" readonly placeholder="点击生成今日学习摘要"></textarea>
+      </div>
+
     </section>
 
     <!-- ──────────── 页面3：错题本（占位） ──────────── -->
@@ -239,6 +284,7 @@
   <script src="js/tasks.js"></script>
   <script src="js/checkin.js"></script>
   <script src="js/subjects.js"></script>
+  <script src="js/focus.js"></script>
   <script src="js/app.js"></script>
 
   <!-- Service Worker -->

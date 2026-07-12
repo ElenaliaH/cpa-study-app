@@ -51,6 +51,7 @@ var Backup = (function () {
             : '未知时间';
           var subjectCount = (json.subjects || []).length;
           var taskCount    = (json.manualTasks || []).length;
+          var focusCount   = (json.focus_sessions || []).length;
 
           Modal.confirm(
             '即将导入备份数据：\n\n' +
