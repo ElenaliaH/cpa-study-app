@@ -63,6 +63,7 @@ var App = (function () {
     Tasks.init();
     switchTab('tasks');
     if (typeof Subjects !== 'undefined') Subjects.init();
+    if (typeof Focus !== 'undefined') Focus.init();
 
     var navTop = document.querySelector('.nav-top');
     if (navTop) {

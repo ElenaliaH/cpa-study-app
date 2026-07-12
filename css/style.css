@@ -1079,3 +1079,108 @@ body {
   .add-row { flex-wrap: wrap; }
   .task-due-input { max-width: none !important; flex: 1; min-width: 140px; }
 }
+
+/* ============================================================
+   Focus timer
+   ============================================================ */
+.focus-card { text-align: center; }
+.focus-start-row {
+  display: flex; justify-content: center; gap: 22px; flex-wrap: wrap;
+}
+.focus-start-btn {
+  width: 118px; height: 118px; border-radius: 50%;
+  border: 1px solid rgba(94,92,230,.18);
+  background: var(--surface-solid); color: var(--accent);
+  box-shadow: var(--shadow-md); cursor: pointer;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  transition: transform .16s ease, box-shadow .16s ease, background .16s ease;
+  font-family: var(--font);
+}
+.focus-start-btn:hover { transform: translateY(-2px); box-shadow: var(--shadow-lg); }
+.focus-start-btn:active, .focus-start-btn.tap { transform: scale(.95); background: var(--accent-soft); }
+.focus-start-num { font-size: 42px; font-weight: 800; line-height: 1; font-variant-numeric: tabular-nums; }
+.focus-start-label { margin-top: 6px; font-size: 14px; font-weight: 600; color: var(--text-secondary); }
+.focus-timer-panel { display: flex; flex-direction: column; align-items: center; gap: 12px; }
+.focus-subject-line { font-size: 15px; color: var(--text-secondary); margin-bottom: 8px; }
+.focus-subject-line b { color: var(--text); }
+.focus-timer-area {
+  width: min(260px, 88vw); aspect-ratio: 1; border-radius: 50%;
+  border: 1px solid rgba(94,92,230,.20); background: var(--surface-solid);
+  box-shadow: var(--shadow-lg); color: var(--text); cursor: pointer;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  font-family: var(--font); transition: transform .15s ease, border-color .15s ease;
+  touch-action: manipulation; user-select: none;
+}
+.focus-timer-area:active { transform: scale(.98); border-color: var(--accent); }
+.focus-time { font-size: 52px; font-weight: 800; line-height: 1; font-variant-numeric: tabular-nums; color: var(--accent); }
+.focus-state { margin-top: 10px; font-size: 14px; color: var(--text-secondary); }
+.focus-end-link {
+  border: none; background: transparent; color: var(--red); font-family: var(--font);
+  font-size: 14px; cursor: pointer; padding: 8px 12px; border-radius: 8px;
+}
+.focus-end-link:hover { background: var(--red-soft); }
+.focus-subject-list { display: grid; gap: 8px; margin-bottom: 14px; }
+.focus-subject-option {
+  border: 1px solid var(--border); background: var(--surface-solid); color: var(--text);
+  padding: 12px 14px; border-radius: 10px; font-size: 15px; font-family: var(--font);
+  cursor: pointer; transition: background .15s, border-color .15s;
+}
+.focus-subject-option:hover { background: var(--accent-soft); border-color: var(--accent); }
+.focus-finish-info { display: grid; gap: 8px; margin-bottom: 18px; color: var(--text-secondary); font-size: 14px; }
+.focus-finish-info b { color: var(--text); }
+.focus-finish-actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; }
+
+.focus-overview-totals {
+  display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin-bottom: 14px;
+}
+.focus-overview-total {
+  border: 1px solid var(--border); background: var(--surface-solid); border-radius: 8px;
+  padding: 12px; display: grid; gap: 6px;
+}
+.focus-overview-total span { color: var(--text-secondary); font-size: 12px; }
+.focus-overview-total b { color: var(--accent); font-size: 20px; }
+.focus-overview-list { display: grid; gap: 8px; }
+.focus-overview-subject {
+  width: 100%; display: grid; grid-template-columns: 1.2fr repeat(3, minmax(0, 1fr)); gap: 8px; align-items: center;
+  border: 1px solid var(--border); background: var(--surface-solid); color: var(--text-secondary);
+  border-radius: 8px; padding: 10px 12px; font-family: var(--font); font-size: 12px; text-align: left; cursor: pointer;
+}
+.focus-overview-subject:hover { border-color: var(--accent); background: var(--accent-soft); }
+.focus-overview-name { color: var(--text); font-weight: 700; }
+.focus-overview-subject b { color: var(--accent); }
+.summary-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
+.summary-output {
+  width: 100%; min-height: 220px; resize: vertical;
+  border: 1px solid var(--border-strong); border-radius: 10px;
+  background: var(--surface-solid); color: var(--text);
+  padding: 12px; font-family: var(--font); font-size: 13px; line-height: 1.6;
+  outline: none;
+}
+.summary-output:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(94,92,230,.08); }
+.focus-records-panel { margin-top: 16px; border-top: 1px solid var(--border); padding-top: 12px; }
+.focus-records-title { font-size: 13px; font-weight: 700; color: var(--text-secondary); margin-bottom: 8px; }
+.focus-record-row {
+  display: grid; grid-template-columns: 1fr 1fr auto auto auto; gap: 8px; align-items: center;
+  padding: 8px 0; border-bottom: 1px solid var(--border); font-size: 12px; color: var(--text-secondary);
+}
+.focus-record-row:last-child { border-bottom: none; }
+.focus-record-delete {
+  width: 28px; height: 28px; border: none; background: var(--red-soft); color: var(--red);
+  border-radius: 50%; padding: 0; font-family: var(--font); cursor: pointer;
+  font-size: 20px; line-height: 28px; text-align: center;
+}
+.focus-record-delete:hover { filter: brightness(.98); }
+.focus-record-toggle {
+  width: 100%; margin-top: 8px; border: 1px solid var(--border); background: var(--surface-solid);
+  color: var(--text-secondary); border-radius: 8px; padding: 8px 10px;
+  font-family: var(--font); cursor: pointer; font-size: 12px;
+}
+.focus-record-toggle:hover { border-color: var(--accent); color: var(--accent); }
+@media (max-width: 600px) {
+  .focus-overview-totals { grid-template-columns: 1fr; }
+  .focus-overview-subject { grid-template-columns: 1fr; gap: 5px; }
+  .focus-start-btn { width: 112px; height: 112px; }
+  .focus-time { font-size: 44px; }
+  .focus-record-row { grid-template-columns: 1fr 1fr; }
+  .focus-record-delete { grid-column: 1 / -1; }
+}
