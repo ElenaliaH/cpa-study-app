@@ -10,6 +10,7 @@ var Focus = (function () {
   var pressTimer = null;
   var longPressed = false;
   var showAllRecords = false;
+  var ACTIVE_TIMER_KEY = 'cpa_focus_active_timer';
 
   function init() {
     bindStartButtons();
@@ -17,6 +18,8 @@ var Focus = (function () {
     bindSummaryButtons();
     ensureRecordPanel();
     renderRecords();
+    restoreActiveTimer();
+    bindLifecycle();
   }
 
   function bindStartButtons() {
@@ -87,39 +90,54 @@ var Focus = (function () {
 
   function startTimer(minutes, subjectId) {
     var subject = findSubject(subjectId);
+    var now = Date.now();
     state = {
       plannedMinutes: minutes,
       subjectId: subjectId,
       subjectName: subject ? subject.name : '未知科目',
+      durationSeconds: minutes * 60,
       remainingSeconds: minutes * 60,
       elapsedSeconds: 0,
       running: true,
-      startedAt: new Date()
+      startedAt: new Date(now),
+      startedAtMs: now,
+      pausedAccumMs: 0,
+      pausedAtMs: null
     };
-    var startRow = document.getElementById('focusStartRow');
-    var panel = document.getElementById('focusTimerPanel');
-    if (startRow) startRow.style.display = 'none';
-    if (panel) panel.style.display = 'block';
-    setText('focusSubjectName', state.subjectName);
+    showTimerUI();
     renderTimer();
+    persistActiveTimer();
+    startTicker();
+  }
+
+  function startTicker() {
     if (tickId) clearInterval(tickId);
     tickId = setInterval(tick, 1000);
   }
 
   function tick() {
-    if (!state || !state.running) return;
-    state.remainingSeconds = Math.max(0, state.remainingSeconds - 1);
-    state.elapsedSeconds += 1;
+    if (!state) return;
+    syncTimerFromClock();
     renderTimer();
+    persistActiveTimer();
     if (state.remainingSeconds <= 0) finishFlow();
   }
-
   function togglePause() {
     if (!state) return;
-    state.running = !state.running;
+    if (state.running) {
+      syncTimerFromClock();
+      state.running = false;
+      state.pausedAtMs = Date.now();
+    } else {
+      var now = Date.now();
+      if (state.pausedAtMs) state.pausedAccumMs = (state.pausedAccumMs || 0) + (now - state.pausedAtMs);
+      state.pausedAtMs = null;
+      state.running = true;
+    }
+    syncTimerFromClock();
     renderTimer();
+    persistActiveTimer();
   }
-
   function startLongPress() {
     if (!state) return;
     clearLongPress();
@@ -138,8 +156,13 @@ var Focus = (function () {
   function confirmEnd() {
     if (!state) return;
     var wasRunning = state.running;
-    state.running = false;
+    if (state.running) {
+      syncTimerFromClock();
+      state.running = false;
+      state.pausedAtMs = Date.now();
+    }
     renderTimer();
+    persistActiveTimer();
     showModal({
       title: '确认结束本次学习？',
       buttons: [
@@ -148,19 +171,33 @@ var Focus = (function () {
       ],
       onAction: function (value) {
         if (value === 'end') finishFlow();
-        else { state.running = wasRunning; renderTimer(); }
+        else {
+          if (wasRunning) {
+            var now = Date.now();
+            if (state.pausedAtMs) state.pausedAccumMs = (state.pausedAccumMs || 0) + (now - state.pausedAtMs);
+            state.pausedAtMs = null;
+            state.running = true;
+          }
+          syncTimerFromClock();
+          renderTimer();
+          persistActiveTimer();
+        }
       }
     });
   }
 
   function finishFlow() {
-    if (!state) return;
+    if (!state || state.finishing) return;
+    state.finishing = true;
     if (tickId) clearInterval(tickId);
     tickId = null;
+    syncTimerFromClock();
     state.running = false;
-    showFinishDialog(Math.max(1, Math.round(state.elapsedSeconds / 60)));
+    if (!state.pausedAtMs) state.pausedAtMs = Date.now();
+    persistActiveTimer();
+    var actualSeconds = state.remainingSeconds <= 0 ? state.durationSeconds : getElapsedSeconds();
+    showFinishDialog(Math.max(1, Math.round(actualSeconds / 60)));
   }
-
   function showFinishDialog(actualMinutes, overlay) {
     var target = overlay || null;
     var body = '<div class="focus-finish-info">' +
@@ -237,12 +274,13 @@ var Focus = (function () {
       actual_minutes: actualMinutes,
       status: status,
       source: 'focus_timer',
-      created_at: new Date().toISOString()
+      created_at: new Date(state && state.startedAtMs ? state.startedAtMs : Date.now()).toISOString()
     });
     renderDependents();
   }
 
   function resetTimerUI() {
+    clearActiveTimer();
     state = null;
     var startRow = document.getElementById('focusStartRow');
     var panel = document.getElementById('focusTimerPanel');
@@ -259,10 +297,90 @@ var Focus = (function () {
       if (stateText) stateText.textContent = '';
       return;
     }
+    syncTimerFromClock();
     if (time) time.textContent = formatClock(state.remainingSeconds);
     if (stateText) stateText.textContent = state.running ? '计时中' : '已暂停，短按继续';
   }
 
+  function showTimerUI() {
+    var startRow = document.getElementById('focusStartRow');
+    var panel = document.getElementById('focusTimerPanel');
+    if (startRow) startRow.style.display = 'none';
+    if (panel) panel.style.display = 'block';
+    setText('focusSubjectName', state.subjectName);
+  }
+
+  function syncTimerFromClock() {
+    if (!state) return;
+    if (!state.durationSeconds) state.durationSeconds = (state.plannedMinutes || 0) * 60;
+    var elapsed = getElapsedSeconds();
+    state.elapsedSeconds = Math.min(elapsed, state.durationSeconds);
+    state.remainingSeconds = Math.max(0, state.durationSeconds - state.elapsedSeconds);
+  }
+
+  function getElapsedSeconds() {
+    if (!state || !state.startedAtMs) return 0;
+    var endMs = state.running ? Date.now() : (state.pausedAtMs || Date.now());
+    var elapsedMs = endMs - state.startedAtMs - (state.pausedAccumMs || 0);
+    return Math.max(0, Math.floor(elapsedMs / 1000));
+  }
+
+  function persistActiveTimer() {
+    if (!state) return;
+    try {
+      localStorage.setItem(ACTIVE_TIMER_KEY, JSON.stringify({
+        plannedMinutes: state.plannedMinutes,
+        subjectId: state.subjectId,
+        subjectName: state.subjectName,
+        durationSeconds: state.durationSeconds,
+        running: state.running,
+        startedAtMs: state.startedAtMs,
+        pausedAccumMs: state.pausedAccumMs || 0,
+        pausedAtMs: state.pausedAtMs || null
+      }));
+    } catch (e) {}
+  }
+
+  function clearActiveTimer() {
+    try { localStorage.removeItem(ACTIVE_TIMER_KEY); } catch (e) {}
+  }
+
+  function restoreActiveTimer() {
+    if (state) return;
+    var raw = null;
+    try { raw = localStorage.getItem(ACTIVE_TIMER_KEY); } catch (e) { raw = null; }
+    if (!raw) return;
+    try { state = JSON.parse(raw); } catch (e) { clearActiveTimer(); state = null; return; }
+    if (!state || !state.subjectId || !state.startedAtMs) { clearActiveTimer(); state = null; return; }
+    state.startedAt = new Date(state.startedAtMs);
+    state.durationSeconds = state.durationSeconds || (state.plannedMinutes || 0) * 60;
+    state.pausedAccumMs = state.pausedAccumMs || 0;
+    if (state.running) state.pausedAtMs = null;
+    showTimerUI();
+    syncTimerFromClock();
+    renderTimer();
+    startTicker();
+    if (state.remainingSeconds <= 0) setTimeout(finishFlow, 0);
+  }
+
+  function bindLifecycle() {
+    document.addEventListener('visibilitychange', function () {
+      if (!state) return;
+      syncTimerFromClock();
+      renderTimer();
+      persistActiveTimer();
+      if (document.visibilityState === 'visible' && state.remainingSeconds <= 0) finishFlow();
+    });
+    window.addEventListener('pageshow', function () {
+      if (!state) restoreActiveTimer();
+      if (!state) return;
+      syncTimerFromClock();
+      renderTimer();
+      if (state.remainingSeconds <= 0) finishFlow();
+    });
+    window.addEventListener('pagehide', persistActiveTimer);
+    window.addEventListener('beforeunload', persistActiveTimer);
+  }
   function getSubjectFocusStats(subjectId) {
     var sessions = Store.getFocusSessions ? Store.getFocusSessions() : [];
     var today = Store.today();

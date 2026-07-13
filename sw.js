@@ -1,5 +1,5 @@
 // Service Worker — 离线缓存
-var CACHE_NAME = 'cpa-study-v1';
+var CACHE_NAME = 'cpa-study-v2';
 var BASE = '/cpa-study-app';
 var FILES_TO_CACHE = [
   BASE + '/',
@@ -15,6 +15,7 @@ var FILES_TO_CACHE = [
   BASE + '/js/tasks.js',
   BASE + '/js/checkin.js',
   BASE + '/js/subjects.js',
+  BASE + '/js/focus.js',
   BASE + '/js/backup.js',
   BASE + '/js/restday.js',
   BASE + '/js/app.js',
