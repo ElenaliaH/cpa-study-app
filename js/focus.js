@@ -452,37 +452,65 @@ var Focus = (function () {
   function generateDailySummary() {
     var today = Store.today();
     var subjects = Store.getSubjects();
-    var examDays = Progress.getRemainingDays(Store.getExamDate());
-    var lines = ['CPA学习日报', '', '日期：' + today, '', '距离考试：' + examDays + '天', '', '今日学习时间：'];
+    var examTime = new Date(Store.getExamDate() + 'T00:00:00').getTime();
+    var examDays = Math.max(0, Math.floor((examTime - Date.now()) / 86400000));
+    var lines = ['CPA\u5b66\u4e60\u65e5\u62a5', '', '\u65e5\u671f\uff1a' + today, '', '\u8ddd\u79bb\u8003\u8bd5\uff1a' + examDays + '\u5929', '', '\u4eca\u65e5\u5b66\u4e60\u65f6\u95f4\uff1a'];
+
     for (var i = 0; i < subjects.length; i++) {
       var stats = getSubjectFocusStats(subjects[i].id);
-      lines.push(subjects[i].name + '：' + formatMinutes(stats.today));
+      lines.push(subjects[i].name + '\uff1a' + formatMinutes(stats.today));
     }
-    lines.push('', '今日轮次完成：');
+
+    lines.push('', '\u4eca\u65e5\u8f6e\u6b21\u5b8c\u6210\uff1a');
     for (var s = 0; s < subjects.length; s++) {
       var rounds = subjects[s].rounds || [];
-      if (!rounds.length) { lines.push(subjects[s].name + '：未设置轮次'); continue; }
+      if (!rounds.length) { lines.push(subjects[s].name + '\uff1a\u672a\u8bbe\u7f6e\u8f6e\u6b21'); continue; }
       for (var r = 0; r < rounds.length; r++) {
         var todayDone = Progress.getTodayCheckinTotal(rounds[r]);
-        lines.push(subjects[s].name + rounds[r].name + '：' + (todayDone > 0 ? ('完成' + todayDone + rounds[r].unit) : '未完成'));
+        lines.push(subjects[s].name + rounds[r].name + '\uff1a' + (todayDone > 0 ? ('\u5b8c\u6210' + todayDone + rounds[r].unit) : '\u672a\u5b8c\u6210'));
       }
     }
-    lines.push('', '累计学习时间：');
-    for (var j = 0; j < subjects.length; j++) {
-      lines.push(subjects[j].name + '：' + formatMinutes(getSubjectFocusStats(subjects[j].id).total));
+
+    lines.push('', '\u4eca\u65e5\u6253\u5361\u6807\u9898\u4e0e\u5907\u6ce8\uff1a');
+    var detailCount = 0;
+    for (var a = 0; a < subjects.length; a++) {
+      var subject = subjects[a];
+      var subjectRounds = subject.rounds || [];
+      for (var b = 0; b < subjectRounds.length; b++) {
+        var round = subjectRounds[b];
+        var checks = round.checkins || [];
+        for (var c = 0; c < checks.length; c++) {
+          var ch = checks[c];
+          if (ch.date !== today) continue;
+          var title = (ch.title || '').trim();
+          var note = (ch.note || '').trim();
+          if (!title && !note) continue;
+          var parts = [subject.name + round.name];
+          if (title) parts.push('\u6807\u9898\uff1a' + title);
+          if (note) parts.push('\u5907\u6ce8\uff1a' + note);
+          lines.push(parts.join(' | '));
+          detailCount++;
+        }
+      }
     }
-    lines.push('', '当前计划完成情况：');
+    if (!detailCount) lines.push('\u6682\u65e0\u4eca\u65e5\u6253\u5361\u6807\u9898\u6216\u5907\u6ce8');
+
+    lines.push('', '\u7d2f\u8ba1\u5b66\u4e60\u65f6\u95f4\uff1a');
+    for (var j = 0; j < subjects.length; j++) {
+      lines.push(subjects[j].name + '\uff1a' + formatMinutes(getSubjectFocusStats(subjects[j].id).total));
+    }
+
+    lines.push('', '\u5f53\u524d\u8ba1\u5212\u5b8c\u6210\u60c5\u51b5\uff1a');
     for (var k = 0; k < subjects.length; k++) {
       var rs = subjects[k].rounds || [];
-      if (!rs.length) { lines.push(subjects[k].name + '：暂无学习轮次'); continue; }
+      if (!rs.length) { lines.push(subjects[k].name + '\uff1a\u6682\u65e0\u5b66\u4e60\u8f6e\u6b21'); continue; }
       for (var x = 0; x < rs.length; x++) {
         var status = Progress.getProgressStatus(rs[x]);
-        lines.push(subjects[k].name + rs[x].name + '：' + status.label + '，已完成' + Progress.getCompletedWork(rs[x]) + '/' + (rs[x].totalWork || 0) + rs[x].unit);
+        lines.push(subjects[k].name + rs[x].name + '\uff1a' + status.label + '\uff0c\u5df2\u5b8c\u6210' + Progress.getCompletedWork(rs[x]) + '/' + (rs[x].totalWork || 0) + rs[x].unit);
       }
     }
     return lines.join('\n');
   }
-
   function copySummary() {
     var out = document.getElementById('focusSummaryOutput');
     var text = out && out.value ? out.value : generateDailySummary();
