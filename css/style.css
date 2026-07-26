@@ -1099,6 +1099,7 @@ body {
 .focus-start-btn:hover { transform: translateY(-2px); box-shadow: var(--shadow-lg); }
 .focus-start-btn:active, .focus-start-btn.tap { transform: scale(.95); background: var(--accent-soft); }
 .focus-start-num { font-size: 42px; font-weight: 800; line-height: 1; font-variant-numeric: tabular-nums; }
+.focus-start-num-text { font-size: 26px; letter-spacing: 0; }
 .focus-start-label { margin-top: 6px; font-size: 14px; font-weight: 600; color: var(--text-secondary); }
 .focus-timer-panel { display: flex; flex-direction: column; align-items: center; gap: 12px; }
 .focus-subject-line { font-size: 15px; color: var(--text-secondary); margin-bottom: 8px; }
@@ -1179,7 +1180,8 @@ body {
 @media (max-width: 600px) {
   .focus-overview-totals { grid-template-columns: 1fr; }
   .focus-overview-subject { grid-template-columns: 1fr; gap: 5px; }
-  .focus-start-btn { width: 112px; height: 112px; }
+  .focus-start-row { gap: 12px; }
+  .focus-start-btn { width: min(104px, 28vw); height: min(104px, 28vw); }
   .focus-time { font-size: 44px; }
   .focus-record-row { grid-template-columns: 1fr 1fr; }
   .focus-record-delete { grid-column: 1 / -1; }

@@ -26,11 +26,12 @@ var Focus = (function () {
     var buttons = document.querySelectorAll('.focus-start-btn');
     for (var i = 0; i < buttons.length; i++) {
       buttons[i].addEventListener('click', function () {
-        var minutes = parseInt(this.dataset.minutes, 10);
+        var mode = this.dataset.mode === 'countup' ? 'countup' : 'countdown';
+        var minutes = mode === 'countup' ? 0 : parseInt(this.dataset.minutes, 10);
         this.classList.add('tap');
         var btn = this;
         setTimeout(function () { btn.classList.remove('tap'); }, 180);
-        chooseSubject(minutes);
+        chooseSubject(minutes, mode);
       });
     }
   }
@@ -64,7 +65,7 @@ var Focus = (function () {
     if (copy) copy.addEventListener('click', copySummary);
   }
 
-  function chooseSubject(minutes) {
+  function chooseSubject(minutes, mode) {
     var subjects = Store.getSubjects();
     if (!subjects.length) { alert('请先在学习计划中添加科目'); return; }
     var body = '<div class="focus-subject-list">';
@@ -80,7 +81,7 @@ var Focus = (function () {
         var options = overlay.querySelectorAll('.focus-subject-option');
         for (var j = 0; j < options.length; j++) {
           options[j].addEventListener('click', function () {
-            startTimer(minutes, this.dataset.id);
+            startTimer(minutes, this.dataset.id, mode);
             overlay.remove();
           });
         }
@@ -88,10 +89,12 @@ var Focus = (function () {
     });
   }
 
-  function startTimer(minutes, subjectId) {
+  function startTimer(minutes, subjectId, mode) {
     var subject = findSubject(subjectId);
     var now = Date.now();
+    var timerMode = mode === 'countup' ? 'countup' : 'countdown';
     state = {
+      timerMode: timerMode,
       plannedMinutes: minutes,
       subjectId: subjectId,
       subjectName: subject ? subject.name : '未知科目',
@@ -120,7 +123,7 @@ var Focus = (function () {
     syncTimerFromClock();
     renderTimer();
     persistActiveTimer();
-    if (state.remainingSeconds <= 0) finishFlow();
+    if (state.timerMode !== 'countup' && state.remainingSeconds <= 0) finishFlow();
   }
   function togglePause() {
     if (!state) return;
@@ -195,14 +198,17 @@ var Focus = (function () {
     state.running = false;
     if (!state.pausedAtMs) state.pausedAtMs = Date.now();
     persistActiveTimer();
-    var actualSeconds = state.remainingSeconds <= 0 ? state.durationSeconds : getElapsedSeconds();
+    var actualSeconds = state.timerMode === 'countup'
+      ? getElapsedSeconds()
+      : (state.remainingSeconds <= 0 ? state.durationSeconds : getElapsedSeconds());
     showFinishDialog(Math.max(1, Math.round(actualSeconds / 60)));
   }
   function showFinishDialog(actualMinutes, overlay) {
     var target = overlay || null;
+    var plannedText = state.timerMode === 'countup' ? '\u6b63\u5411\u8ba1\u65f6' : state.plannedMinutes + '\u5206\u949f';
     var body = '<div class="focus-finish-info">' +
-      '<div>本次计划时间：<b>' + state.plannedMinutes + '分钟</b></div>' +
-      '<div>实际学习时间：<b id="focusActualText">' + actualMinutes + '分钟</b></div>' +
+      '<div>\u672c\u6b21\u8ba1\u5212\u65f6\u95f4\uff1a<b>' + plannedText + '</b></div>' +
+      '<div>\u5b9e\u9645\u5b66\u4e60\u65f6\u95f4\uff1a<b id="focusActualText">' + actualMinutes + '\u5206\u949f</b></div>' +
     '</div>';
 
     if (!target) {
@@ -223,7 +229,7 @@ var Focus = (function () {
 
     card.querySelector('[data-focus-finish="save"]').addEventListener('click', function (e) {
       e.stopPropagation();
-      saveSession(actualMinutes, actualMinutes >= state.plannedMinutes ? 'completed' : 'partial');
+      saveSession(actualMinutes, state.timerMode === 'countup' || actualMinutes >= state.plannedMinutes ? 'completed' : 'partial');
       overlay.remove();
       resetTimerUI();
     });
@@ -298,8 +304,11 @@ var Focus = (function () {
       return;
     }
     syncTimerFromClock();
-    if (time) time.textContent = formatClock(state.remainingSeconds);
-    if (stateText) stateText.textContent = state.running ? '计时中' : '已暂停，短按继续';
+    var displaySeconds = state.timerMode === 'countup' ? state.elapsedSeconds : state.remainingSeconds;
+    if (time) time.textContent = formatClock(displaySeconds);
+    if (stateText) stateText.textContent = state.running
+      ? (state.timerMode === 'countup' ? '\u6b63\u5411\u8ba1\u65f6\u4e2d' : '\u8ba1\u65f6\u4e2d')
+      : '\u5df2\u6682\u505c\uff0c\u77ed\u6309\u7ee7\u7eed';
   }
 
   function showTimerUI() {
@@ -314,6 +323,11 @@ var Focus = (function () {
     if (!state) return;
     if (!state.durationSeconds) state.durationSeconds = (state.plannedMinutes || 0) * 60;
     var elapsed = getElapsedSeconds();
+    if (state.timerMode === 'countup') {
+      state.elapsedSeconds = elapsed;
+      state.remainingSeconds = 0;
+      return;
+    }
     state.elapsedSeconds = Math.min(elapsed, state.durationSeconds);
     state.remainingSeconds = Math.max(0, state.durationSeconds - state.elapsedSeconds);
   }
@@ -329,6 +343,7 @@ var Focus = (function () {
     if (!state) return;
     try {
       localStorage.setItem(ACTIVE_TIMER_KEY, JSON.stringify({
+        timerMode: state.timerMode,
         plannedMinutes: state.plannedMinutes,
         subjectId: state.subjectId,
         subjectName: state.subjectName,
@@ -353,6 +368,7 @@ var Focus = (function () {
     try { state = JSON.parse(raw); } catch (e) { clearActiveTimer(); state = null; return; }
     if (!state || !state.subjectId || !state.startedAtMs) { clearActiveTimer(); state = null; return; }
     state.startedAt = new Date(state.startedAtMs);
+    state.timerMode = state.timerMode === 'countup' ? 'countup' : 'countdown';
     state.durationSeconds = state.durationSeconds || (state.plannedMinutes || 0) * 60;
     state.pausedAccumMs = state.pausedAccumMs || 0;
     if (state.running) state.pausedAtMs = null;
@@ -360,7 +376,7 @@ var Focus = (function () {
     syncTimerFromClock();
     renderTimer();
     startTicker();
-    if (state.remainingSeconds <= 0) setTimeout(finishFlow, 0);
+    if (state.timerMode !== 'countup' && state.remainingSeconds <= 0) setTimeout(finishFlow, 0);
   }
 
   function bindLifecycle() {
@@ -369,14 +385,14 @@ var Focus = (function () {
       syncTimerFromClock();
       renderTimer();
       persistActiveTimer();
-      if (document.visibilityState === 'visible' && state.remainingSeconds <= 0) finishFlow();
+      if (document.visibilityState === 'visible' && state.timerMode !== 'countup' && state.remainingSeconds <= 0) finishFlow();
     });
     window.addEventListener('pageshow', function () {
       if (!state) restoreActiveTimer();
       if (!state) return;
       syncTimerFromClock();
       renderTimer();
-      if (state.remainingSeconds <= 0) finishFlow();
+      if (state.timerMode !== 'countup' && state.remainingSeconds <= 0) finishFlow();
     });
     window.addEventListener('pagehide', persistActiveTimer);
     window.addEventListener('beforeunload', persistActiveTimer);
