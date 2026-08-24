@@ -49,7 +49,7 @@
     <div class="nav-tabs">
       <button class="nav-tab active" data-tab="tasks">首页</button>
       <button class="nav-tab" data-tab="plan">学习计划</button>
-      <button class="nav-tab" data-tab="mistakes">错题本</button>
+      <button class="nav-tab" data-tab="tax">税法刷题</button>
     </div>
   </nav>
 
@@ -166,9 +166,9 @@
           <div class="entry-mini-title">📋 学习计划</div>
           <div class="entry-mini-desc">打卡记录与科目管理</div>
         </a>
-        <a class="entry-mini" href="#" data-nav="mistakes">
-          <div class="entry-mini-title">📝 错题本</div>
-          <div class="entry-mini-desc">记录与回顾错题</div>
+        <a class="entry-mini" href="#" data-nav="tax">
+          <div class="entry-mini-title">税法刷题</div>
+          <div class="entry-mini-desc">章节练习、错题与收藏</div>
         </a>
       </div>
     </section>
@@ -221,20 +221,154 @@
 
     </section>
 
-    <!-- ──────────── 页面3：错题本（占位） ──────────── -->
-    <section class="page" data-page="mistakes">
-      <div class="section-card">
-        <div class="section-header">
-          <h2 class="section-title">错题本</h2>
+    <!-- ──────────── 页面3：税法刷题 ──────────── -->
+    <section class="page tax-page" data-page="tax">
+      <div class="tax-page-header">
+        <div>
+          <p class="tax-eyebrow">CPA 税法</p>
+          <h1 class="tax-page-title">章节刷题</h1>
         </div>
-        <div class="placeholder-page">
-          <div class="placeholder-page-icon">📝</div>
-          <div class="placeholder-page-title">错题本功能即将上线</div>
-          <div class="placeholder-page-desc">
-            你可以在这里记录错题、正确答案和错误原因，<br>
-            按科目和标签分类复习。
+        <button class="btn btn-sm btn-ghost" id="taxRefreshBtn" type="button" title="刷新题库数据">刷新</button>
+      </div>
+
+      <div class="tax-status" id="taxStatus" role="status" style="display:none;"></div>
+
+      <div class="tax-view" id="taxHomeView">
+        <div class="tax-overview" id="taxOverview">
+          <div class="tax-metric">
+            <span>已完成</span>
+            <b id="taxAnsweredMetric">--</b>
+          </div>
+          <div class="tax-metric">
+            <span>正确率</span>
+            <b id="taxAccuracyMetric">--</b>
+          </div>
+          <div class="tax-metric">
+            <span>总进度</span>
+            <b id="taxProgressMetric">--</b>
           </div>
         </div>
+
+        <button class="tax-resume" id="taxResumeBtn" type="button" style="display:none;">
+          <span>
+            <small>继续上次练习</small>
+            <b id="taxResumeTitle">上次做到第 1 题</b>
+          </span>
+          <span class="tax-resume-arrow" aria-hidden="true">→</span>
+        </button>
+
+        <div class="tax-library-actions" aria-label="题目管理">
+          <button type="button" data-tax-collection="wrong">
+            <span class="tax-action-mark tax-action-wrong">×</span>
+            <span><b>错题本</b><small>集中重做做错的题</small></span>
+          </button>
+          <button type="button" data-tax-collection="favorite">
+            <span class="tax-action-mark tax-action-favorite">★</span>
+            <span><b>我的收藏</b><small>回看重点题目</small></span>
+          </button>
+          <button type="button" data-tax-collection="note">
+            <span class="tax-action-mark tax-action-note">N</span>
+            <span><b>做题笔记</b><small>查看已记录批注</small></span>
+          </button>
+        </div>
+
+        <div class="section-card tax-chapter-section">
+          <div class="section-header tax-section-header">
+            <div>
+              <h2 class="section-title">选择章节</h2>
+              <span class="section-meta">选择模式后点击章节开始</span>
+            </div>
+            <div class="tax-mode-control" id="taxModeControl" role="group" aria-label="刷题模式">
+              <button class="active" type="button" data-tax-mode="sequential">顺序</button>
+              <button type="button" data-tax-mode="random">随机</button>
+            </div>
+          </div>
+          <div class="tax-chapter-list" id="taxChapterList">
+            <div class="tax-loading">正在加载题库...</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="tax-view" id="taxPracticeView" style="display:none;">
+        <div class="tax-practice-toolbar">
+          <button class="tax-icon-button" id="taxExitPracticeBtn" type="button" title="返回章节列表" aria-label="返回章节列表">←</button>
+          <div class="tax-practice-heading">
+            <b id="taxPracticeTitle">税法练习</b>
+            <span id="taxPracticeProgressText">1 / 10</span>
+          </div>
+          <button class="tax-icon-button" id="taxOpenAnswerCardBtn" type="button" title="打开答题卡" aria-label="打开答题卡">▦</button>
+        </div>
+        <div class="tax-progress-track">
+          <div class="tax-progress-fill" id="taxPracticeProgressFill"></div>
+        </div>
+
+        <div class="section-card tax-question-card">
+          <div class="tax-question-meta">
+            <span id="taxQuestionType">单选题</span>
+            <button class="tax-favorite-button" id="taxFavoriteBtn" type="button" aria-label="收藏本题" title="收藏本题">☆</button>
+          </div>
+          <div class="tax-question-stem" id="taxQuestionStem"></div>
+          <div class="tax-options" id="taxOptions"></div>
+          <button class="btn btn-primary tax-submit-button" id="taxSubmitBtn" type="button" disabled>提交答案</button>
+        </div>
+
+        <div class="section-card tax-result-card" id="taxResultCard" style="display:none;">
+          <div class="tax-result-title" id="taxResultTitle"></div>
+          <div class="tax-answer-line">
+            <span>你的答案</span>
+            <b id="taxUserAnswer">--</b>
+          </div>
+          <div class="tax-answer-line">
+            <span>标准答案</span>
+            <b id="taxCorrectAnswer">--</b>
+          </div>
+          <div class="tax-explanation">
+            <h3>答案解析</h3>
+            <div id="taxExplanation"></div>
+          </div>
+          <div class="tax-note-editor">
+            <label for="taxNoteInput">做题笔记</label>
+            <textarea id="taxNoteInput" maxlength="4000" placeholder="记录易错点、口诀或自己的理解"></textarea>
+            <button class="btn btn-sm btn-ghost" id="taxSaveNoteBtn" type="button">保存笔记</button>
+          </div>
+        </div>
+
+        <div class="section-card tax-ai-card" id="taxAiCard" style="display:none;">
+          <div class="section-header">
+            <div>
+              <h2 class="section-title">AI 辅助解释</h2>
+              <span class="section-meta">不会修改原答案和原解析</span>
+            </div>
+          </div>
+          <div class="tax-ai-quick">
+            <button type="button" data-tax-ai-quick="为什么这个选项错误？">为什么这个选项错误</button>
+            <button type="button" data-tax-ai-quick="请举一个贴近实务的例子。">举个例子</button>
+            <button type="button" data-tax-ai-quick="请用一眼看懂的方式解释。">一眼看懂地解释</button>
+          </div>
+          <div class="tax-ai-messages" id="taxAiMessages"></div>
+          <div class="tax-ai-input-row">
+            <textarea id="taxAiInput" maxlength="600" rows="2" placeholder="围绕当前题目继续追问"></textarea>
+            <button class="btn btn-primary" id="taxAiSendBtn" type="button">发送</button>
+          </div>
+          <p class="tax-ai-disclaimer">AI 内容仅作辅助解释，请以原题答案和原解析为准。</p>
+        </div>
+
+        <div class="tax-practice-nav">
+          <button class="btn btn-ghost" id="taxPrevBtn" type="button">上一题</button>
+          <button class="btn btn-primary" id="taxNextBtn" type="button">下一题</button>
+        </div>
+      </div>
+
+      <div class="tax-view" id="taxCollectionView" style="display:none;">
+        <div class="tax-collection-toolbar">
+          <button class="tax-icon-button" id="taxCollectionBackBtn" type="button" aria-label="返回章节列表">←</button>
+          <div>
+            <h2 id="taxCollectionTitle">错题本</h2>
+            <span id="taxCollectionCount">0 道题</span>
+          </div>
+          <button class="btn btn-sm btn-primary" id="taxStartCollectionBtn" type="button">开始练习</button>
+        </div>
+        <div class="tax-collection-list" id="taxCollectionList"></div>
       </div>
     </section>
 
@@ -244,7 +378,7 @@
       <button class="btn btn-sm btn-ghost" onclick="Backup.importData()">📥 导入数据</button>
     </div>
 
-    <p class="footer">CPA Study · 数据仅保存在你的浏览器中</p>
+    <p class="footer">CPA Study · 登录数据通过 Supabase 在设备间同步</p>
   </main>
 
   <!-- ====== JavaScript ====== -->
@@ -277,6 +411,27 @@
     </div>
   </div>
 
+  <div class="modal-overlay" id="taxAnswerCardOverlay" style="display:none;">
+    <div class="modal-card tax-answer-card-modal">
+      <div class="tax-answer-card-header">
+        <div>
+          <h2>答题卡</h2>
+          <span id="taxAnswerCardSummary">0 / 0 已作答</span>
+        </div>
+        <button class="tax-icon-button" id="taxCloseAnswerCardBtn" type="button" aria-label="关闭答题卡">×</button>
+      </div>
+      <div class="tax-answer-card-grid" id="taxAnswerCardGrid"></div>
+      <div class="tax-answer-card-legend">
+        <span><i class="current"></i>当前</span>
+        <span><i class="correct"></i>正确</span>
+        <span><i class="wrong"></i>错误</span>
+        <span><i></i>未答</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="tax-toast" id="taxToast" role="status" style="display:none;"></div>
+
   <script src="js/store.js"></script>
   <script src="js/supabaseClient.js"></script>
   <script src="js/supabaseStorage.js"></script>
@@ -289,12 +444,23 @@
   <script src="js/checkin.js"></script>
   <script src="js/subjects.js"></script>
   <script src="js/focus.js"></script>
+  <script src="js/taxPracticeLogic.js"></script>
+  <script src="js/taxPracticeData.js"></script>
+  <script src="js/taxPractice.js"></script>
+  <script>
+    if (
+      (location.hostname === 'localhost' || location.hostname === '127.0.0.1') &&
+      new URLSearchParams(location.search).get('taxDemo') === '1'
+    ) {
+      document.write('<script src="tests/tax-practice-demo.js"><\/script>');
+    }
+  </script>
   <script src="js/app.js"></script>
 
   <!-- Service Worker -->
   <script>
     if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('/cpa-study-app/sw.js');
+      navigator.serviceWorker.register('sw.js');
     }
   </script>
 

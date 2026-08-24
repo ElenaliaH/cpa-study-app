@@ -4,3 +4,7 @@ dist/
 .DS_Store
 Thumbs.db
 *.log
+
+# Local source material and generated tax question-bank artifacts
+题库来源/
+work/tax-bank/
