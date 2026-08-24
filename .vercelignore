@@ -1,0 +1,8 @@
+node_modules/
+tests/
+tools/
+work/
+题库来源/
+supabase/
+worker/
+*.log

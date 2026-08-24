@@ -28,9 +28,7 @@ var App = (function () {
       if (typeof Checkin !== 'undefined' && Checkin.render) Checkin.render();
       if (typeof Subjects !== 'undefined') Subjects.render();
     }
-    if (tabName === 'mistakes' && typeof Mistakes !== 'undefined' && Mistakes.render) {
-      Mistakes.render();
-    }
+    if (tabName === 'tax' && typeof TaxPractice !== 'undefined') TaxPractice.activate();
   }
 
   function bindTabs() {
@@ -45,8 +43,7 @@ var App = (function () {
     for (var j = 0; j < miniCards.length; j++) {
       miniCards[j].addEventListener('click', function (e) {
         e.preventDefault();
-        if (this.dataset.nav === 'plan') switchTab('plan');
-        if (this.dataset.nav === 'mistakes') switchTab('mistakes');
+        if (this.dataset.nav) switchTab(this.dataset.nav);
       });
     }
   }
@@ -64,6 +61,7 @@ var App = (function () {
     switchTab('tasks');
     if (typeof Subjects !== 'undefined') Subjects.init();
     if (typeof Focus !== 'undefined') Focus.init();
+    if (typeof TaxPractice !== 'undefined') TaxPractice.init();
 
     var navTop = document.querySelector('.nav-top');
     if (navTop) {

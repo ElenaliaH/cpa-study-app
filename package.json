@@ -2,7 +2,8 @@
   "name": "cpa-study-app",
   "version": "1.0.0",
   "scripts": {
-    "build:supabase": "esbuild tools/supabase-shim.js --bundle --format=iife --outfile=js/vendor/supabase.js"
+    "build:supabase": "esbuild tools/supabase-shim.js --bundle --format=iife --outfile=js/vendor/supabase.js",
+    "test": "node tests/tax-practice-logic.test.js && node tests/tax-practice-migration.test.js && node tests/tax-bank-output.test.js && node tests/tax-ai-api.test.js"
   },
   "devDependencies": {
     "@supabase/supabase-js": "^2.110.1",
