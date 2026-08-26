@@ -5,6 +5,7 @@ const MAX_SUBJECTIVE_ANSWER_LENGTH = 6000;
 const MAX_HISTORY_MESSAGES = 12;
 const OPENAI_TIMEOUT_MS = 45000;
 const SUBJECTIVE_TYPES = new Set(['subjective', 'calculation', 'comprehensive']);
+const DEFAULT_SUPABASE_URL = 'https://efhlbnashkkujrsvckvl.supabase.co';
 
 function sendJson(res, status, body) {
   res.status(status).json(body);
@@ -32,8 +33,11 @@ function configureCors(req, res) {
     res.setHeader('Access-Control-Allow-Origin', allowedOrigin);
     res.setHeader('Vary', 'Origin');
   }
-  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Authorization, Content-Type');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  res.setHeader(
+    'Access-Control-Allow-Headers',
+    'Authorization, Content-Type, X-Supabase-Publishable-Key'
+  );
 }
 
 function getBearerToken(req) {
@@ -41,18 +45,52 @@ function getBearerToken(req) {
   return match ? match[1].trim() : '';
 }
 
-function getConfig() {
+function getRequestPublishableKey(req) {
+  const value = String(req.headers['x-supabase-publishable-key'] || '').trim();
+  if (!/^[A-Za-z0-9._-]{20,512}$/.test(value)) return '';
+  return value;
+}
+
+function getConfig(req) {
   const config = {
     openAiKey: process.env.OPENAI_API_KEY,
     model: process.env.OPENAI_MODEL || 'gpt-5.4-mini',
-    supabaseUrl: String(process.env.SUPABASE_URL || '').replace(/\/+$/, ''),
-    supabaseKey: process.env.SUPABASE_PUBLISHABLE_KEY,
+    supabaseUrl: String(
+      process.env.SUPABASE_URL ||
+      process.env.NEXT_PUBLIC_SUPABASE_URL ||
+      DEFAULT_SUPABASE_URL
+    ).replace(/\/+$/, ''),
+    supabaseKey:
+      process.env.SUPABASE_PUBLISHABLE_KEY ||
+      process.env.SUPABASE_ANON_KEY ||
+      process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ||
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
+      getRequestPublishableKey(req),
     dailyLimit: Math.max(1, Math.min(Number(process.env.TAX_AI_DAILY_LIMIT || 20), 200))
   };
-  if (!config.openAiKey || !config.supabaseUrl || !config.supabaseKey) {
-    throw new Error('AI service environment is incomplete.');
+  if (!config.openAiKey) {
+    const error = new Error('OpenAI service is not configured.');
+    error.code = 'openai_not_configured';
+    error.status = 503;
+    throw error;
+  }
+  if (!config.supabaseUrl || !config.supabaseKey) {
+    const error = new Error('Supabase client configuration is unavailable.');
+    error.code = 'supabase_client_config_missing';
+    error.status = 503;
+    throw error;
   }
   return config;
+}
+
+function getHealth() {
+  const configured = Boolean(process.env.OPENAI_API_KEY);
+  return {
+    ok: configured,
+    service: 'tax-ai',
+    status: configured ? 'ready' : 'configuration_required',
+    model: process.env.OPENAI_MODEL || 'gpt-5.4-mini'
+  };
 }
 
 async function supabaseRequest(config, path, token, options = {}) {
@@ -78,7 +116,10 @@ async function supabaseRequest(config, path, token, options = {}) {
   }
   if (!response.ok) {
     const detail = body && (body.message || body.msg || body.error_description);
-    throw new Error(detail || 'Supabase request failed.');
+    const error = new Error(detail || 'Supabase request failed.');
+    error.status = response.status;
+    error.source = 'supabase';
+    throw error;
   }
   return body;
 }
@@ -387,6 +428,8 @@ async function callOpenAi(config, prompt, safetyIdentifier, options = {}) {
   if (!response.ok) {
     const error = new Error('OpenAI response failed.');
     error.status = response.status;
+    error.code = 'openai_request_failed';
+    error.upstreamCode = String(body && body.error && body.error.code || '');
     error.requestId = response.headers.get('x-request-id') || '';
     throw error;
   }
@@ -522,12 +565,16 @@ async function handleSubjectiveGrade(req, res, config, token, user, context, bod
 module.exports = async function handler(req, res) {
   configureCors(req, res);
   if (req.method === 'OPTIONS') return res.status(204).end();
+  if (req.method === 'GET') {
+    const health = getHealth();
+    return sendJson(res, health.ok ? 200 : 503, health);
+  }
   if (req.method !== 'POST') return sendJson(res, 405, { error: '只支持 POST 请求。' });
 
   try {
-    const config = getConfig();
     const token = getBearerToken(req);
     if (!token) return sendJson(res, 401, { error: '请先登录。' });
+    const config = getConfig(req);
 
     const body = typeof req.body === 'string' ? JSON.parse(req.body) : (req.body || {});
     const action = String(body.action || 'ask').trim();
@@ -610,15 +657,42 @@ module.exports = async function handler(req, res) {
       model: config.model
     });
   } catch (error) {
-    const isAuthError = /auth|jwt|login/i.test(String(error.message || ''));
-    const status = isAuthError ? 401 : 500;
+    const isAuthError = error.source === 'supabase' && (error.status === 401 || error.status === 403);
+    let status = isAuthError ? 401 : 500;
+    let clientMessage = isAuthError
+      ? '登录状态已失效，请重新登录。'
+      : 'AI解释暂时不可用，请稍后重试。';
+
+    if (error instanceof SyntaxError) {
+      status = 400;
+      clientMessage = '请求内容格式错误。';
+    } else if (error.code === 'openai_not_configured') {
+      status = 503;
+      clientMessage = 'AI服务尚未完成配置，请联系管理员。';
+    } else if (error.code === 'supabase_client_config_missing') {
+      status = 503;
+      clientMessage = '登录校验配置不可用，请刷新页面后重试。';
+    } else if (error.name === 'AbortError') {
+      status = 504;
+      clientMessage = 'AI响应超时，请稍后重试。';
+    } else if (error.code === 'openai_request_failed' && error.status === 401) {
+      status = 503;
+      clientMessage = 'AI服务密钥无效或已失效，请联系管理员。';
+    } else if (error.code === 'openai_request_failed' && error.status === 429) {
+      status = 503;
+      clientMessage = 'AI服务额度不足或当前请求较多，请稍后重试。';
+    } else if (error.code === 'openai_request_failed' && error.status >= 500) {
+      status = 502;
+      clientMessage = 'AI服务暂时不可用，请稍后重试。';
+    }
+
     console.error('[tax-ai]', {
       message: error.message,
+      code: error.code || null,
       status: error.status || null,
+      upstreamCode: error.upstreamCode || null,
       requestId: error.requestId || null
     });
-    return sendJson(res, status, {
-      error: status === 401 ? '登录状态已失效，请重新登录。' : 'AI解释暂时不可用，请稍后重试。'
-    });
+    return sendJson(res, status, { error: clientMessage });
   }
 };

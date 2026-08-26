@@ -530,13 +530,14 @@ var TaxPractice = (function () {
     byId('taxPrevBtn').disabled = true;
     byId('taxNextBtn').disabled = true;
 
-    TaxPracticeData.getAccessToken()
-      .then(function (token) {
+    TaxPracticeData.getAiRequestCredentials()
+      .then(function (credentials) {
         return fetch('/api/tax-ai', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'Authorization': 'Bearer ' + token
+            'Authorization': 'Bearer ' + credentials.accessToken,
+            'X-Supabase-Publishable-Key': credentials.publishableKey
           },
           body: JSON.stringify({
             action: 'grade',
@@ -1134,13 +1135,14 @@ var TaxPractice = (function () {
       if (requestController && aiRequestQuestionId === questionId) requestController.abort();
     }, 45000);
 
-    TaxPracticeData.getAccessToken()
-      .then(function (token) {
+    TaxPracticeData.getAiRequestCredentials()
+      .then(function (credentials) {
         return fetch('/api/tax-ai', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'Authorization': 'Bearer ' + token
+            'Authorization': 'Bearer ' + credentials.accessToken,
+            'X-Supabase-Publishable-Key': credentials.publishableKey
           },
           signal: requestController ? requestController.signal : undefined,
           body: JSON.stringify({

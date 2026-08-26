@@ -362,6 +362,12 @@
     },
     getAccessToken: function () {
       return Promise.resolve('demo-token');
+    },
+    getAiRequestCredentials: function () {
+      return Promise.resolve({
+        accessToken: 'demo-token',
+        publishableKey: 'test-only-publishable-key'
+      });
     }
   };
 
