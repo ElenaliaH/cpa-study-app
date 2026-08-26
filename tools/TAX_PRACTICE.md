@@ -24,7 +24,7 @@
 - work/tax-bank/tax-subjective-bank.validation.md
 - work/tax-bank/tax-subjective-bank.publishable.json
 
-主观题解析器只发布题干、答案边界明确且不依赖表格或纯图片的题块。被隔离题必须逐题对照原 Word，不允许让 AI 补写原题内容。
+主观题解析器只发布题干、答案边界明确的题块；可读取的 Word 表格会转换为文本表格，纯图片或无法读取的内容继续隔离。被隔离题必须逐题对照原 Word，不允许让 AI 补写原题内容。
 
 ## 数据库迁移
 

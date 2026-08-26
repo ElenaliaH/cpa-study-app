@@ -76,9 +76,11 @@ function Write-Utf8File {
   [IO.File]::WriteAllText($Path, $Content, [Text.UTF8Encoding]::new($false))
 }
 
+$QuestionLeadLabelPattern = '(?:(?:\d{4}年)|(?:\d+[.、]?))?(?:经典母题|母题变形|同类母题|关联母题|计算问答题|综合题|案例分析题|计算题|计算(?=\s*\d))\s*\d*(?:[-—]\d+)?'
+
 function Test-QuestionLead {
   param([string]$Text)
-  return (Normalize-Text $Text) -match '^(?:经典母题|母题变形|计算问答题|综合题|案例分析题)'
+  return (Normalize-Text $Text) -match ('^' + $QuestionLeadLabelPattern)
 }
 
 function Get-CleanLead {
@@ -86,14 +88,14 @@ function Get-CleanLead {
   $value = Normalize-Text $Text
   $duplicate = [regex]::Match(
     $value,
-    '^(?<label>(?:经典母题|母题变形|计算问答题|综合题|案例分析题)\s*\d*(?:[-—]\d+)?)\s*\k<label>'
+    ('^(?<label>' + $QuestionLeadLabelPattern + ')\s*\k<label>')
   )
   if ($duplicate.Success) {
     $value = $value.Substring($duplicate.Groups['label'].Length).Trim()
   }
   $match = [regex]::Match(
     $value,
-    '^(?<label>(?:经典母题|母题变形|计算问答题|综合题|案例分析题)\s*\d*(?:[-—]\d+)?)\s*(?<text>.*)$'
+    ('^(?<label>' + $QuestionLeadLabelPattern + ')\s*(?<text>.*)$')
   )
   if (-not $match.Success) {
     return [pscustomobject]@{ Label = ''; Text = $value }
@@ -343,11 +345,11 @@ try {
     metadata = [ordered]@{
       sourceFile = [IO.Path]::GetFileName($resolvedSource)
       generatedAt = [DateTimeOffset]::Now.ToString('o')
-      parserVersion = 1
+      parserVersion = 2
       combinedAnswerMarkerCount = $answerIndexes.Count
       candidateCount = $questions.Count
       publishableCount = $publishable.Count
-      note = 'Only conservative no-risk blocks are publishable. Review excluded blocks against the original Word.'
+      note = 'Question leads and answer boundaries are recovered from the original Word without generated content.'
     }
     chapters = $chapters.ToArray()
     questions = $questions.ToArray()
@@ -360,7 +362,7 @@ try {
     metadata = [ordered]@{
       sourceFile = [IO.Path]::GetFileName($resolvedSource)
       generatedAt = [DateTimeOffset]::Now.ToString('o')
-      parserVersion = 1
+      parserVersion = 2
       questionCount = $publishable.Count
       sourceRule = 'Every item is extracted verbatim from the configured private DOCX.'
     }

@@ -49,8 +49,8 @@
   function loadBank() {
     if (!bankPromise) {
       bankPromise = Promise.all([
-        nativeFetch('work/tax-bank/tax-question-bank.publishable.json?v=20260826h'),
-        nativeFetch('work/tax-bank/tax-subjective-bank.publishable.json?v=20260826h')
+        nativeFetch('work/tax-bank/tax-question-bank.publishable.json?v=20260827a'),
+        nativeFetch('work/tax-bank/tax-subjective-bank.publishable.json?v=20260827a')
       ]).then(function (responses) {
         if (!responses[0].ok || !responses[1].ok) {
           throw new Error('本地演示题库未生成，请先运行解析器。');
