@@ -79,6 +79,7 @@ $chapterRows = @(
       order_no = [int]$chapter.order
       title = $chapter.title
       question_count = [int]$chapter.questionCount
+      objective_question_count = [int]$chapter.questionCount
       source_version = 'wang-tingxi-word-v1'
       is_published = $true
     }
@@ -114,6 +115,24 @@ for ($offset = 0; $offset -lt $questionRows.Count; $offset += $BatchSize) {
   $batch = @($questionRows[$offset..$end])
   Send-UpsertBatch 'tax_questions' $batch 'id' $headers $supabaseUrl
   Write-Output "Upserted questions $($offset + 1)-$($end + 1) of $($questionRows.Count)."
+}
+
+foreach ($chapter in $chapters) {
+  $chapterId = [Uri]::EscapeDataString($chapter.id)
+  $countUri = $supabaseUrl.TrimEnd('/') + '/rest/v1/tax_questions?chapter_id=eq.' + $chapterId +
+    '&is_published=eq.true&select=id,question_type&limit=1000'
+  $published = @(Invoke-RestMethod -Method Get -Uri $countUri -Headers $headers)
+  $subjectiveCount = @($published | Where-Object {
+    $_.question_type -in @('subjective', 'calculation', 'comprehensive')
+  }).Count
+  $objectiveCount = $published.Count - $subjectiveCount
+  $chapterUri = $supabaseUrl.TrimEnd('/') + '/rest/v1/tax_chapters?id=eq.' + $chapterId
+  $body = @{
+    question_count = $published.Count
+    objective_question_count = $objectiveCount
+    subjective_question_count = $subjectiveCount
+  } | ConvertTo-Json -Compress
+  Invoke-RestMethod -Method Patch -Uri $chapterUri -Headers $headers -ContentType 'application/json' -Body $body | Out-Null
 }
 
 Write-Output 'Tax question-bank import completed. No existing rows were deleted.'

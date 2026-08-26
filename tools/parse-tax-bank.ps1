@@ -378,7 +378,15 @@ try {
     if ([string]::IsNullOrWhiteSpace($stem)) { $issues.Add('missing_stem') }
     if ($options.Count -eq 0) { $issues.Add('no_options_or_subjective_question') }
     if ([string]::IsNullOrWhiteSpace($answerRaw)) { $issues.Add('missing_answer_text') }
-    if ([string]::IsNullOrWhiteSpace($explanation)) { $issues.Add('missing_or_nonstandard_explanation') }
+    if ([string]::IsNullOrWhiteSpace($explanation)) {
+      if ($options.Count -ge 2 -and $answerLetters.Count -gt 0) {
+        $explanation = '原书仅提供标准答案：' + ($answerLetters -join '、') + '，未提供单独解析。'
+        $warnings.Add('source_explanation_not_provided')
+      }
+      else {
+        $issues.Add('missing_or_nonstandard_explanation')
+      }
+    }
     if ($analysisIndex -gt $answerIndex + 1) { $issues.Add('analysis_not_immediately_after_answer') }
     if ($hadDuplicateLabel) { $warnings.Add('duplicated_source_label_text_cleaned') }
 
