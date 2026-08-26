@@ -30,6 +30,26 @@ function Get-NodeText {
   return Normalize-Text (-join $parts)
 }
 
+function Get-TableText {
+  param(
+    [System.Xml.XmlNode]$Node,
+    [System.Xml.XmlNamespaceManager]$NamespaceManager
+  )
+
+  $rows = [Collections.Generic.List[string]]::new()
+  foreach ($row in $Node.SelectNodes('./w:tr', $NamespaceManager)) {
+    $cells = [Collections.Generic.List[string]]::new()
+    foreach ($cell in $row.SelectNodes('./w:tc', $NamespaceManager)) {
+      $cellText = (Get-NodeText $cell $NamespaceManager) -replace '\s+', ' '
+      $cells.Add($cellText) | Out-Null
+    }
+    if (@($cells | Where-Object { -not [string]::IsNullOrWhiteSpace($_) }).Count -gt 0) {
+      $rows.Add('| ' + ($cells -join ' | ') + ' |') | Out-Null
+    }
+  }
+  return ($rows -join $NewLine).Trim()
+}
+
 function Convert-TopicNumber {
   param([string]$ChineseNumber)
   $map = @{
@@ -125,7 +145,7 @@ try {
   if ($null -eq $body) { throw 'The DOCX document body could not be read.' }
 
   $paragraphs = [Collections.Generic.List[object]]::new()
-  $tableBodyIndexes = [Collections.Generic.List[int]]::new()
+  $tables = [Collections.Generic.List[object]]::new()
   $paragraphNumber = 0
   $bodyIndex = -1
   foreach ($node in $body.ChildNodes) {
@@ -140,7 +160,11 @@ try {
       })
     }
     elseif ($node.LocalName -eq 'tbl') {
-      $tableBodyIndexes.Add($bodyIndex)
+      $tables.Add([pscustomobject]@{
+        bodyIndex = $bodyIndex
+        text = Get-TableText $node $ns
+        hasVisual = $null -ne $node.SelectSingleNode('.//w:drawing | .//w:pict', $ns)
+      })
     }
   }
 
@@ -206,6 +230,16 @@ try {
         if (-not [string]::IsNullOrWhiteSpace($line)) { $stemLines.Add($line) }
       }
     }
+    if ($leadIndex -ge 0) {
+      $stemTables = @($tables | Where-Object {
+        $_.bodyIndex -gt $paragraphs[$leadIndex].bodyIndex -and
+        $_.bodyIndex -lt $answerParagraph.bodyIndex -and
+        -not [string]::IsNullOrWhiteSpace($_.text)
+      })
+      foreach ($table in $stemTables) {
+        $stemLines.Add('【题目表格】' + $NewLine + $table.text)
+      }
+    }
     $stem = ($stemLines -join $NewLine).Trim()
 
     $answerEnd = $paragraphs.Count
@@ -227,6 +261,19 @@ try {
       $line = Normalize-Text $paragraphs[$scan].text
       if (-not [string]::IsNullOrWhiteSpace($line)) { $answerLines.Add($line) }
     }
+    $answerEndBodyIndex = if ($answerEnd -lt $paragraphs.Count) {
+      $paragraphs[$answerEnd].bodyIndex
+    } else {
+      [int]::MaxValue
+    }
+    $answerTables = @($tables | Where-Object {
+      $_.bodyIndex -gt $answerParagraph.bodyIndex -and
+      $_.bodyIndex -lt $answerEndBodyIndex -and
+      -not [string]::IsNullOrWhiteSpace($_.text)
+    })
+    foreach ($table in $answerTables) {
+      $answerLines.Add('【答案表格】' + $NewLine + $table.text)
+    }
     $explanation = ($answerLines -join $NewLine).Trim()
 
     if ([string]::IsNullOrWhiteSpace($stem) -or $stem.Length -lt 20) { $issues.Add('missing_or_short_stem') }
@@ -242,7 +289,11 @@ try {
       } else {
         [int]::MaxValue
       }
-      if (@($tableBodyIndexes | Where-Object { $_ -gt $blockStart -and $_ -lt $blockEnd }).Count -gt 0) {
+      $unreadableTables = @($tables | Where-Object {
+        $_.bodyIndex -gt $blockStart -and $_.bodyIndex -lt $blockEnd -and
+        [string]::IsNullOrWhiteSpace($_.text)
+      })
+      if ($unreadableTables.Count -gt 0) {
         $issues.Add('table_dependent_content')
       }
       if (@($paragraphs[$leadIndex..([Math]::Min($answerEnd - 1, $paragraphs.Count - 1))] |

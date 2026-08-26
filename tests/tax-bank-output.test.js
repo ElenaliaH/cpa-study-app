@@ -17,7 +17,7 @@ if (!fs.existsSync(outputPath)) {
 
 const data = JSON.parse(fs.readFileSync(outputPath, 'utf8'));
 assert.strictEqual(data.chapters.length, 14);
-assert.ok(data.questions.length > 1000);
+assert.strictEqual(data.questions.length, 1298);
 assert.strictEqual(new Set(data.questions.map((question) => question.id)).size, data.questions.length);
 
 for (const chapter of data.chapters) {
@@ -36,6 +36,14 @@ for (const question of data.questions) {
   assert.ok(question.correctAnswer.length >= 1);
   const labels = new Set(question.options.map((option) => option.label));
   for (const answer of question.correctAnswer) assert.ok(labels.has(answer));
+}
+
+const answerOnlyQuestions = data.questions.filter((question) =>
+  (question.warnings || []).includes('source_explanation_not_provided')
+);
+assert.strictEqual(answerOnlyQuestions.length, 90);
+for (const question of answerOnlyQuestions) {
+  assert.ok(question.explanation.startsWith('原书仅提供标准答案：'));
 }
 
 process.stdout.write('PASS publishable question bank is complete and internally consistent\n');

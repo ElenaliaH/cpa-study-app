@@ -1295,6 +1295,28 @@ body {
 .tax-mode-control button.active {
   color: var(--text); background: var(--surface-solid); box-shadow: var(--shadow-sm);
 }
+.tax-chapter-filter-row {
+  min-height: 48px; display: flex; align-items: center; justify-content: space-between;
+  gap: 12px; padding: 0 0 12px; border-bottom: 1px solid var(--border);
+}
+.tax-filter-label {
+  min-width: 0; color: var(--text-secondary); font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+.tax-scope-control {
+  display: inline-grid; grid-template-columns: 1fr 1fr;
+  padding: 3px; border: 1px solid var(--border); border-radius: 8px;
+  background: rgba(0,0,0,.045);
+}
+.tax-scope-control button {
+  min-width: 82px; min-height: 34px; padding: 7px 14px;
+  border: none; border-radius: 6px; background: transparent;
+  color: var(--text-secondary); font-family: var(--font); font-size: 13px;
+  font-weight: 650; cursor: pointer;
+}
+.tax-scope-control button.active {
+  color: var(--accent); background: var(--surface-solid); box-shadow: var(--shadow-sm);
+}
 .tax-chapter-list { display: grid; }
 .tax-chapter-row {
   width: 100%; min-height: 72px; display: grid;
@@ -1311,6 +1333,10 @@ body {
   font-family: var(--font); cursor: pointer;
 }
 .tax-chapter-open:hover .tax-chapter-main b { color: var(--accent); }
+.tax-chapter-open:disabled {
+  cursor: not-allowed; opacity: .52;
+}
+.tax-chapter-open:disabled:hover .tax-chapter-main b { color: inherit; }
 .tax-chapter-reset {
   min-width: 0; display: grid; place-content: center; gap: 2px;
   border: none; border-left: 1px solid var(--border);
@@ -1320,6 +1346,9 @@ body {
 .tax-chapter-reset span { font-size: 19px; line-height: 1; }
 .tax-chapter-reset small { font-size: 10px; white-space: nowrap; }
 .tax-chapter-reset:hover { color: var(--accent); background: var(--accent-soft); }
+.tax-chapter-reset:disabled {
+  cursor: not-allowed; opacity: .35; background: transparent; color: var(--text-tertiary);
+}
 .tax-chapter-order {
   width: 30px; height: 30px; display: flex; align-items: center; justify-content: center;
   border-radius: 50%; background: var(--accent-soft); color: var(--accent);
@@ -1372,7 +1401,7 @@ body {
   background: var(--accent); transition: width .2s ease;
 }
 
-.tax-question-card { padding-bottom: 24px; }
+.tax-question-card { padding-bottom: 24px; touch-action: pan-y; }
 .tax-question-meta {
   min-height: 34px; display: flex; align-items: center;
   justify-content: space-between; margin-bottom: 10px;
@@ -1380,6 +1409,14 @@ body {
 .tax-question-meta > span {
   color: var(--accent); font-size: 12px; font-weight: 700;
 }
+.tax-question-actions { display: flex; align-items: center; gap: 6px; }
+.tax-remove-wrong-button {
+  min-height: 34px; padding: 0 10px; border: 1px solid #efb0ac;
+  border-radius: 7px; background: var(--surface-solid); color: #b42318;
+  font: 12px var(--font); cursor: pointer;
+}
+.tax-remove-wrong-button:hover:not(:disabled) { border-color: #b42318; background: var(--red-soft); }
+.tax-remove-wrong-button:disabled { cursor: not-allowed; opacity: .45; }
 .tax-favorite-button {
   width: 34px; height: 34px; border: none; border-radius: 50%;
   background: transparent; color: var(--text-tertiary);
@@ -1513,13 +1550,27 @@ body {
 .tax-ai-message.user b { color: var(--accent); }
 .tax-ai-message.assistant { justify-self: start; background: #eef7f0; }
 .tax-ai-message.assistant b { color: #23743d; }
+.tax-ai-message.pending { color: var(--text-secondary); }
+.tax-ai-message.pending > div::after {
+  content: ''; display: inline-block; width: 5px; height: 5px; margin-left: 6px;
+  border-radius: 50%; background: currentColor; animation: taxAiPulse 1s ease-in-out infinite;
+}
+.tax-ai-message.error { border: 1px solid #efb0ac; background: var(--red-soft); color: #8f1d16; }
+.tax-ai-message.error b { color: #b42318; }
+@keyframes taxAiPulse {
+  0%, 100% { opacity: .25; transform: scale(.8); }
+  50% { opacity: 1; transform: scale(1); }
+}
 .tax-ai-input-row {
   display: grid; grid-template-columns: minmax(0, 1fr) auto;
   gap: 8px; align-items: end; margin-top: 8px;
 }
 .tax-ai-input-row .btn { min-height: 44px; }
 .tax-ai-disclaimer { margin-top: 9px; color: var(--text-tertiary); font-size: 11px; }
-.tax-practice-nav { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.tax-practice-nav {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 10px;
+  margin: -4px 0 18px;
+}
 .tax-practice-nav .btn { min-height: 44px; }
 .tax-practice-nav .btn:disabled { opacity: .35; cursor: not-allowed; }
 
@@ -1595,23 +1646,6 @@ body {
 .tax-answer-card-legend i.wrong { background: var(--red-soft); border-color: #ff9f99; }
 .tax-answer-card-legend i.reviewed { background: #eef7f0; border-color: #6fcf8a; }
 
-.tax-scope-modal { width: min(440px, calc(100vw - 28px)); }
-.tax-scope-header {
-  display: flex; align-items: center; justify-content: space-between; gap: 14px; margin-bottom: 18px;
-}
-.tax-scope-header h2 { font-size: 18px; letter-spacing: 0; }
-.tax-scope-header span { color: var(--text-secondary); font-size: 12px; }
-.tax-scope-options { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-.tax-scope-options > button {
-  min-height: 92px; display: grid; place-content: center; gap: 6px;
-  padding: 14px; border: 1px solid var(--border-strong); border-radius: 8px;
-  background: var(--surface-solid); color: var(--text); cursor: pointer; font-family: var(--font);
-}
-.tax-scope-options > button:hover:not(:disabled) { border-color: var(--accent); background: var(--accent-soft); }
-.tax-scope-options > button:disabled { opacity: .45; cursor: not-allowed; }
-.tax-scope-options b { font-size: 16px; letter-spacing: 0; }
-.tax-scope-options span { color: var(--text-secondary); font-size: 12px; }
-
 .tax-toast {
   position: fixed; left: 50%; bottom: max(24px, env(safe-area-inset-bottom));
   z-index: 12000; transform: translateX(-50%);
@@ -1642,6 +1676,9 @@ body {
   .tax-section-header { align-items: flex-start; flex-wrap: wrap; }
   .tax-section-header > div:first-child { min-width: 0; flex: 1; }
   .tax-practice-settings { width: 100%; justify-content: space-between; }
+  .tax-chapter-filter-row { align-items: flex-start; flex-direction: column; }
+  .tax-scope-control { width: 100%; }
+  .tax-scope-control button { min-width: 0; }
   .tax-chapter-section { max-width: 100%; overflow: hidden; }
   .tax-section-header .section-meta { font-size: 11px; }
   .tax-chapter-row { grid-template-columns: minmax(0, 1fr) 54px; }
@@ -1649,7 +1686,7 @@ body {
   .tax-chapter-reset small { font-size: 9px; }
   .tax-question-stem { font-size: 16px; line-height: 1.7; }
   .tax-question-card, .tax-result-card, .tax-ai-card, .tax-grade-card { padding: 18px 14px; }
-  .tax-subjective-buttons, .tax-scope-options { grid-template-columns: 1fr; }
+  .tax-subjective-buttons { grid-template-columns: 1fr; }
   .tax-grade-header { align-items: flex-start; }
   .tax-note-editor, .tax-ai-input-row { grid-template-columns: 1fr; }
   .tax-note-editor .btn, .tax-ai-input-row .btn { width: 100%; }

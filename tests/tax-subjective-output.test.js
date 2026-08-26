@@ -16,7 +16,7 @@ if (!fs.existsSync(outputPath)) {
 }
 
 const data = JSON.parse(fs.readFileSync(outputPath, 'utf8'));
-assert.ok(data.questions.length >= 10);
+assert.strictEqual(data.questions.length, 29);
 assert.strictEqual(new Set(data.questions.map((question) => question.id)).size, data.questions.length);
 
 for (const question of data.questions) {
@@ -29,5 +29,10 @@ for (const question of data.questions) {
   assert.ok(question.chapterId);
   assert.ok(question.sourceParagraph > 0);
 }
+
+const flattenedTableQuestions = data.questions.filter((question) =>
+  question.stem.includes('【题目表格】') || question.explanation.includes('【答案表格】')
+);
+assert.strictEqual(flattenedTableQuestions.length, 11);
 
 process.stdout.write('PASS subjective output contains conservative complete Word-sourced items\n');

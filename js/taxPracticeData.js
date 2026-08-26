@@ -5,6 +5,11 @@
 var TaxPracticeData = (function () {
   'use strict';
 
+  var ACTIVE_BANK_SOURCE_VERSIONS = [
+    'wang-tingxi-word-v2-complete-20260826',
+    'wang-tingxi-word-v2-subjective-table-20260826'
+  ];
+
   function getUser() {
     var user = SupabaseStorage.getCurrentUser();
     if (!user) throw new Error('请先登录后再使用税法刷题。');
@@ -117,6 +122,7 @@ var TaxPracticeData = (function () {
       .select('id,sequence_no')
       .eq('chapter_id', chapterId)
       .eq('is_published', true)
+      .in('source_version', ACTIVE_BANK_SOURCE_VERSIONS)
       .in('question_type', types)
       .order('sequence_no')
       .then(function (result) {
@@ -282,6 +288,26 @@ var TaxPracticeData = (function () {
       .eq('user_id', user.id)
       .then(function (result) {
         unwrap(result, '练习进度保存失败');
+        return true;
+      });
+  }
+
+  function updateSessionQuestions(sessionId, questionIds, index, answeredCount, correctCount) {
+    var user = getUser();
+    var ids = (questionIds || []).slice(0, 200);
+    return supabaseClient
+      .from('tax_practice_sessions')
+      .update({
+        question_ids: ids,
+        current_index: ids.length ? Math.min(Math.max(0, index), ids.length - 1) : 0,
+        answered_count: Math.max(0, answeredCount || 0),
+        correct_count: Math.max(0, correctCount || 0),
+        last_active_at: new Date().toISOString()
+      })
+      .eq('id', sessionId)
+      .eq('user_id', user.id)
+      .then(function (result) {
+        unwrap(result, '练习题目列表保存失败');
         return true;
       });
   }
@@ -462,6 +488,7 @@ var TaxPracticeData = (function () {
     getSubjectiveAttempts: getSubjectiveAttempts,
     saveSubjectiveAnswer: saveSubjectiveAnswer,
     saveProgress: saveProgress,
+    updateSessionQuestions: updateSessionQuestions,
     completeSession: completeSession,
     recordAnswer: recordAnswer,
     recordSubjectiveReview: recordSubjectiveReview,

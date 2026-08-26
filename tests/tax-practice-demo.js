@@ -10,7 +10,7 @@
   var states = {};
   var aiMessages = {};
   var nativeFetch = window.fetch.bind(window);
-  var demoStateKey = 'cpa-tax-demo-state-v4';
+  var demoStateKey = 'cpa-tax-demo-state-v5';
 
   function clearDemoState() {
     localStorage.removeItem(demoStateKey);
@@ -48,29 +48,30 @@
 
   function loadBank() {
     if (!bankPromise) {
-      bankPromise = nativeFetch('work/tax-bank/tax-question-bank.publishable.json')
-        .then(function (response) {
-          if (!response.ok) throw new Error('本地演示题库未生成，请先运行解析器。');
-          return response.json();
-        })
-        .then(function (bank) {
-          var chapter = bank.chapters[0];
-          var demoSubjective = {
-            id: 'tax-demo-subjective-001',
-            chapterId: chapter.id,
-            sequenceNo: 5,
-            sourceLabel: '主观题演示',
-            questionType: 'calculation',
-            stem: '请说明一般纳税人在判断一项业务税务处理时，应依次核对哪些信息。',
-            options: [],
-            correctAnswer: [],
-            answerRaw: '',
-            explanation: '先确认纳税主体和交易性质，再判断纳税义务发生时间、计税依据、适用税率及可抵扣项目，最后计算应纳税额。'
-          };
-          bank.questions.splice(4, 0, demoSubjective);
-          chapter.questionCount++;
-          return bank;
+      bankPromise = Promise.all([
+        nativeFetch('work/tax-bank/tax-question-bank.publishable.json?v=20260826h'),
+        nativeFetch('work/tax-bank/tax-subjective-bank.publishable.json?v=20260826h')
+      ]).then(function (responses) {
+        if (!responses[0].ok || !responses[1].ok) {
+          throw new Error('本地演示题库未生成，请先运行解析器。');
+        }
+        return Promise.all([responses[0].json(), responses[1].json()]);
+      }).then(function (banks) {
+        var bank = banks[0];
+        var subjectiveBank = banks[1];
+        bank.questions = bank.questions.concat(subjectiveBank.questions);
+        bank.chapters = bank.chapters.map(function (chapter) {
+          var subjectiveChapter = subjectiveBank.chapters.find(function (item) {
+            return item.id === chapter.id;
+          });
+          chapter.subjectiveQuestionCount = subjectiveChapter
+            ? subjectiveChapter.subjectiveQuestionCount
+            : 0;
+          chapter.questionCount += chapter.subjectiveQuestionCount;
+          return chapter;
         });
+        return bank;
+      });
     }
     return bankPromise;
   }
@@ -248,6 +249,18 @@
     },
     saveProgress: function (sessionId, index) {
       sessions[sessionId].current_index = index;
+      sessions[sessionId].last_active_at = new Date().toISOString();
+      latestSession = sessions[sessionId];
+      saveDemoState();
+      return Promise.resolve(true);
+    },
+    updateSessionQuestions: function (sessionId, questionIds, index, answeredCount, correctCount) {
+      sessions[sessionId].question_ids = questionIds.slice();
+      sessions[sessionId].current_index = questionIds.length
+        ? Math.min(Math.max(0, index), questionIds.length - 1)
+        : 0;
+      sessions[sessionId].answered_count = Math.max(0, answeredCount || 0);
+      sessions[sessionId].correct_count = Math.max(0, correctCount || 0);
       sessions[sessionId].last_active_at = new Date().toISOString();
       latestSession = sessions[sessionId];
       saveDemoState();
@@ -497,24 +510,19 @@
           if (reset) reset.click();
         }, 700);
         setTimeout(function () {
-          var objective = document.querySelector('[data-tax-scope="objective"]');
-          if (objective) objective.click();
-        }, 850);
-        setTimeout(function () {
           var confirm = document.getElementById('modalConfirm');
           if (confirm) confirm.click();
-        }, 1050);
+        }, 900);
         return;
+      }
+      if (scenario === 'subjective') {
+        var subjectiveScope = document.querySelector('[data-tax-scope="subjective"]');
+        if (subjectiveScope) subjectiveScope.click();
       }
       setTimeout(function () {
         var chapter = document.querySelector('[data-tax-chapter]');
         if (chapter) chapter.click();
       }, 700);
-      setTimeout(function () {
-        var scope = scenario === 'subjective' ? 'subjective' : 'objective';
-        var scopeButton = document.querySelector('[data-tax-scope="' + scope + '"]');
-        if (scopeButton) scopeButton.click();
-      }, 900);
       if (scenario === 'progress') {
         setTimeout(function () {
           var firstOption = document.querySelector('[data-tax-option]');
