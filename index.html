@@ -14,7 +14,7 @@
   <link rel="apple-touch-icon" href="icon.svg">
   <link rel="icon" href="icon.svg">
 
-  <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="css/style.css?v=20260826b">
 
   <!-- Supabase SDK（本地构建） -->
   <script src="js/vendor/supabase.js"></script>
@@ -278,9 +278,11 @@
               <h2 class="section-title">选择章节</h2>
               <span class="section-meta">选择模式后点击章节开始</span>
             </div>
-            <div class="tax-mode-control" id="taxModeControl" role="group" aria-label="刷题模式">
-              <button class="active" type="button" data-tax-mode="sequential">顺序</button>
-              <button type="button" data-tax-mode="random">随机</button>
+            <div class="tax-practice-settings">
+              <div class="tax-mode-control" id="taxModeControl" role="group" aria-label="刷题模式">
+                <button class="active" type="button" data-tax-mode="sequential">顺序</button>
+                <button type="button" data-tax-mode="random">随机</button>
+              </div>
             </div>
           </div>
           <div class="tax-chapter-list" id="taxChapterList">
@@ -309,21 +311,25 @@
           </div>
           <div class="tax-question-stem" id="taxQuestionStem"></div>
           <div class="tax-options" id="taxOptions"></div>
-          <button class="btn btn-primary tax-submit-button" id="taxSubmitBtn" type="button" disabled>提交答案</button>
+          <div class="tax-subjective-action" id="taxSubjectiveAction" style="display:none;">
+            <p>先独立完成，再查看原书答案及解析。</p>
+            <button class="btn btn-primary" id="taxRevealSubjectiveBtn" type="button">显示答案及解析</button>
+          </div>
+          <button class="btn btn-primary tax-submit-button" id="taxSubmitBtn" type="button">提交答案</button>
         </div>
 
         <div class="section-card tax-result-card" id="taxResultCard" style="display:none;">
           <div class="tax-result-title" id="taxResultTitle"></div>
-          <div class="tax-answer-line">
+          <div class="tax-answer-line" id="taxUserAnswerLine">
             <span>你的答案</span>
             <b id="taxUserAnswer">--</b>
           </div>
-          <div class="tax-answer-line">
+          <div class="tax-answer-line" id="taxCorrectAnswerLine">
             <span>标准答案</span>
             <b id="taxCorrectAnswer">--</b>
           </div>
           <div class="tax-explanation">
-            <h3>答案解析</h3>
+            <h3 id="taxExplanationTitle">答案解析</h3>
             <div id="taxExplanation"></div>
           </div>
           <div class="tax-note-editor">
@@ -336,7 +342,7 @@
         <div class="section-card tax-ai-card" id="taxAiCard" style="display:none;">
           <div class="section-header">
             <div>
-              <h2 class="section-title">AI 辅助解释</h2>
+              <h2 class="section-title">GPT 辅助解释</h2>
               <span class="section-meta">不会修改原答案和原解析</span>
             </div>
           </div>
@@ -350,7 +356,7 @@
             <textarea id="taxAiInput" maxlength="600" rows="2" placeholder="围绕当前题目继续追问"></textarea>
             <button class="btn btn-primary" id="taxAiSendBtn" type="button">发送</button>
           </div>
-          <p class="tax-ai-disclaimer">AI 内容仅作辅助解释，请以原题答案和原解析为准。</p>
+          <p class="tax-ai-disclaimer">GPT 内容仅作辅助解释，请以原题答案和原解析为准。</p>
         </div>
 
         <div class="tax-practice-nav">
@@ -421,11 +427,10 @@
         <button class="tax-icon-button" id="taxCloseAnswerCardBtn" type="button" aria-label="关闭答题卡">×</button>
       </div>
       <div class="tax-answer-card-grid" id="taxAnswerCardGrid"></div>
-      <div class="tax-answer-card-legend">
+      <div class="tax-answer-card-legend" id="taxAnswerCardLegend">
         <span><i class="current"></i>当前</span>
-        <span><i class="correct"></i>正确</span>
-        <span><i class="wrong"></i>错误</span>
-        <span><i></i>未答</span>
+        <span><i class="answered"></i>已作答</span>
+        <span><i></i>未作答</span>
       </div>
     </div>
   </div>
@@ -444,15 +449,15 @@
   <script src="js/checkin.js"></script>
   <script src="js/subjects.js"></script>
   <script src="js/focus.js"></script>
-  <script src="js/taxPracticeLogic.js"></script>
-  <script src="js/taxPracticeData.js"></script>
-  <script src="js/taxPractice.js"></script>
+  <script src="js/taxPracticeLogic.js?v=20260826b"></script>
+  <script src="js/taxPracticeData.js?v=20260826b"></script>
+  <script src="js/taxPractice.js?v=20260826b"></script>
   <script>
     if (
       (location.hostname === 'localhost' || location.hostname === '127.0.0.1') &&
       new URLSearchParams(location.search).get('taxDemo') === '1'
     ) {
-      document.write('<script src="tests/tax-practice-demo.js"><\/script>');
+      document.write('<script src="tests/tax-practice-demo.js?v=20260826c"><\/script>');
     }
   </script>
   <script src="js/app.js"></script>

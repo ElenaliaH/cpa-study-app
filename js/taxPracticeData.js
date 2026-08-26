@@ -50,9 +50,45 @@ var TaxPracticeData = (function () {
       });
   }
 
+  function listSubjectiveStates() {
+    var user = getUser();
+    return supabaseClient
+      .from('tax_subjective_reviews')
+      .select('question_id,tax_questions(chapter_id)')
+      .eq('user_id', user.id)
+      .then(function (result) {
+        var rows = unwrap(result, '主观题进度加载失败') || [];
+        return rows.map(function (row) {
+          row.chapter_id = row.tax_questions ? row.tax_questions.chapter_id : null;
+          delete row.tax_questions;
+          return row;
+        });
+      });
+  }
+
+  function listChapterSessions() {
+    var user = getUser();
+    return supabaseClient
+      .from('tax_practice_sessions')
+      .select('id,chapter_id,mode,question_ids,current_index,answered_count,correct_count,status,last_active_at')
+      .eq('user_id', user.id)
+      .order('last_active_at', { ascending: false })
+      .limit(200)
+      .then(function (result) {
+        return (unwrap(result, '专题进度加载失败') || []).filter(function (row) {
+          return !!row.chapter_id;
+        });
+      });
+  }
+
   function loadDashboard() {
-    return Promise.all([listChapters(), listUserStates()]).then(function (values) {
-      return TaxPracticeLogic.calculateDashboard(values[0], values[1]);
+    return Promise.all([
+      listChapters(),
+      listUserStates(),
+      listSubjectiveStates(),
+      listChapterSessions()
+    ]).then(function (values) {
+      return TaxPracticeLogic.calculateDashboard(values[0], values[1], values[2], values[3]);
     });
   }
 
@@ -84,6 +120,21 @@ var TaxPracticeData = (function () {
       });
   }
 
+  function getLatestChapterSession(chapterId) {
+    var user = getUser();
+    return supabaseClient
+      .from('tax_practice_sessions')
+      .select('*')
+      .eq('user_id', user.id)
+      .eq('chapter_id', chapterId)
+      .order('last_active_at', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+      .then(function (result) {
+        return unwrap(result, '专题进度加载失败');
+      });
+  }
+
   function insertSession(questionIds, chapterId, mode) {
     var user = getUser();
     return supabaseClient
@@ -109,6 +160,24 @@ var TaxPracticeData = (function () {
       if (mode === 'random') questionIds = TaxPracticeLogic.shuffle(questionIds);
       return insertSession(questionIds, chapterId, mode);
     });
+  }
+
+  function resetChapterSession(chapterId, mode) {
+    var user = getUser();
+    return supabaseClient
+      .from('tax_practice_sessions')
+      .update({
+        status: 'completed',
+        completed_at: new Date().toISOString(),
+        last_active_at: new Date().toISOString()
+      })
+      .eq('user_id', user.id)
+      .eq('chapter_id', chapterId)
+      .eq('status', 'active')
+      .then(function (result) {
+        unwrap(result, '旧专题练习结束失败');
+        return createChapterSession(chapterId, mode);
+      });
   }
 
   function createCollectionSession(questionIds, mode) {
@@ -159,6 +228,18 @@ var TaxPracticeData = (function () {
       });
   }
 
+  function getSubjectiveReviews(sessionId) {
+    var user = getUser();
+    return supabaseClient
+      .from('tax_subjective_reviews')
+      .select('id,question_id,viewed_at')
+      .eq('session_id', sessionId)
+      .eq('user_id', user.id)
+      .then(function (result) {
+        return unwrap(result, '主观题完成记录加载失败') || [];
+      });
+  }
+
   function saveProgress(sessionId, index) {
     var user = getUser();
     return supabaseClient
@@ -200,6 +281,29 @@ var TaxPracticeData = (function () {
       })
       .then(function (result) {
         var rows = unwrap(result, '答案保存失败') || [];
+        return rows[0] || null;
+      });
+  }
+
+  function recordSubjectiveReview(sessionId, questionId) {
+    getUser();
+    return supabaseClient
+      .rpc('record_tax_subjective_review', {
+        p_session_id: sessionId,
+        p_question_id: questionId
+      })
+      .then(function (result) {
+        var rows = unwrap(result, '主观题进度保存失败') || [];
+        return rows[0] || null;
+      });
+  }
+
+  function refreshSessionCounts(sessionId) {
+    getUser();
+    return supabaseClient
+      .rpc('refresh_tax_session_counts', { p_session_id: sessionId })
+      .then(function (result) {
+        var rows = unwrap(result, '练习统计刷新失败') || [];
         return rows[0] || null;
       });
   }
@@ -314,14 +418,19 @@ var TaxPracticeData = (function () {
   return {
     loadDashboard: loadDashboard,
     getLatestSession: getLatestSession,
+    getLatestChapterSession: getLatestChapterSession,
     createChapterSession: createChapterSession,
+    resetChapterSession: resetChapterSession,
     createCollectionSession: createCollectionSession,
     getSession: getSession,
     getQuestions: getQuestions,
     getAttempts: getAttempts,
+    getSubjectiveReviews: getSubjectiveReviews,
     saveProgress: saveProgress,
     completeSession: completeSession,
     recordAnswer: recordAnswer,
+    recordSubjectiveReview: recordSubjectiveReview,
+    refreshSessionCounts: refreshSessionCounts,
     getQuestionState: getQuestionState,
     setFavorite: setFavorite,
     saveNote: saveNote,

@@ -12,6 +12,7 @@ var TaxPractice = (function () {
   var session = null;
   var questions = [];
   var attemptsByQuestion = {};
+  var reviewsByQuestion = {};
   var currentIndex = 0;
   var selectedAnswer = [];
   var questionOpenedAt = 0;
@@ -57,6 +58,11 @@ var TaxPractice = (function () {
     var chapterList = byId('taxChapterList');
     if (chapterList) {
       chapterList.addEventListener('click', function (event) {
+        var resetButton = event.target.closest('[data-tax-reset-chapter]');
+        if (resetButton) {
+          resetChapter(resetButton.dataset.taxResetChapter);
+          return;
+        }
         var button = event.target.closest('[data-tax-chapter]');
         if (button) startChapter(button.dataset.taxChapter);
       });
@@ -90,6 +96,7 @@ var TaxPractice = (function () {
     });
 
     byId('taxOptions').addEventListener('click', handleOptionClick);
+    byId('taxRevealSubjectiveBtn').addEventListener('click', revealSubjectiveAnswer);
     byId('taxSubmitBtn').addEventListener('click', submitAnswer);
     byId('taxPrevBtn').addEventListener('click', function () {
       moveToQuestion(currentIndex - 1);
@@ -185,15 +192,23 @@ var TaxPractice = (function () {
       var item = dashboard.chapters[i];
       var chapter = item.chapter;
       chapterTitleById[chapter.id] = chapter.title;
-      html += '<button class="tax-chapter-row" type="button" data-tax-chapter="' +
+      var roundLabel = item.latestSession
+        ? (item.latestSession.status === 'active' ? ' · 可继续' : ' · 本轮已完成')
+        : '';
+      html += '<div class="tax-chapter-row">' +
+        '<button class="tax-chapter-open" type="button" data-tax-chapter="' +
         TaxPracticeLogic.escapeHtml(chapter.id) + '">' +
         '<span class="tax-chapter-order">' + chapter.order_no + '</span>' +
         '<span class="tax-chapter-main"><b>' + TaxPracticeLogic.escapeHtml(chapter.title) + '</b>' +
         '<small>' + item.answered + ' / ' + chapter.question_count + ' 已完成 · 正确率 ' +
-        item.correctRate + '%</small>' +
+        item.correctRate + '%' + roundLabel + '</small>' +
         '<span class="tax-chapter-progress"><i style="width:' + item.progressRate + '%"></i></span></span>' +
         '<span class="tax-chapter-rate">' + item.progressRate + '%</span>' +
-        '</button>';
+        '</button>' +
+        '<button class="tax-chapter-reset" type="button" data-tax-reset-chapter="' +
+        TaxPracticeLogic.escapeHtml(chapter.id) + '" title="重新刷题" aria-label="重新刷题：' +
+        TaxPracticeLogic.escapeHtml(chapter.title) + '"><span aria-hidden="true">↻</span><small>重新刷题</small></button>' +
+        '</div>';
     }
     byId('taxChapterList').innerHTML = html || '<div class="tax-empty">暂无已发布章节。</div>';
 
@@ -212,13 +227,30 @@ var TaxPractice = (function () {
   }
 
   function startChapter(chapterId) {
-    setStatus('正在创建练习...', 'loading');
-    TaxPracticeData.createChapterSession(chapterId, activeMode)
-      .then(function (created) {
+    setStatus('正在读取专题进度...', 'loading');
+    TaxPracticeData.getLatestChapterSession(chapterId)
+      .then(function (existing) {
+        if (existing) return existing;
+        return TaxPracticeData.createChapterSession(chapterId, activeMode);
+      })
+      .then(function (chapterSession) {
         setStatus('', '');
-        return loadSession(created);
+        return loadSession(chapterSession);
       })
       .catch(showError);
+  }
+
+  function resetChapter(chapterId) {
+    Modal.confirm('重新刷题会结束当前专题进度并从头开始，但不会删除历史答题、错题、收藏或笔记。确定继续吗？', function (ok) {
+      if (!ok) return;
+      setStatus('正在创建新一轮专题练习...', 'loading');
+      TaxPracticeData.resetChapterSession(chapterId, activeMode)
+        .then(function (created) {
+          setStatus('', '');
+          return loadSession(created);
+        })
+        .catch(showError);
+    });
   }
 
   function openSession(sessionId) {
@@ -232,12 +264,17 @@ var TaxPractice = (function () {
     session = loadedSession;
     return Promise.all([
       TaxPracticeData.getQuestions(session.question_ids || []),
-      TaxPracticeData.getAttempts(session.id)
+      TaxPracticeData.getAttempts(session.id),
+      TaxPracticeData.getSubjectiveReviews(session.id)
     ]).then(function (values) {
       questions = values[0];
       attemptsByQuestion = {};
       for (var i = 0; i < values[1].length; i++) {
         attemptsByQuestion[values[1][i].question_id] = values[1][i];
+      }
+      reviewsByQuestion = {};
+      for (var reviewIndex = 0; reviewIndex < values[2].length; reviewIndex++) {
+        reviewsByQuestion[values[2][reviewIndex].question_id] = values[2][reviewIndex];
       }
       if (!questions.length) throw new Error('当前练习没有可显示的题目。');
       currentIndex = TaxPracticeLogic.clamp(session.current_index || 0, 0, questions.length - 1);
@@ -251,13 +288,13 @@ var TaxPractice = (function () {
     var question = questions[currentIndex];
     if (!question) return;
 
-    selectedAnswer = [];
+    var isSubjective = TaxPracticeLogic.isSubjectiveType(question.question_type);
+    var attempt = attemptsByQuestion[question.id] || null;
+    var review = reviewsByQuestion[question.id] || null;
+    selectedAnswer = attempt ? TaxPracticeLogic.normalizeAnswer(attempt.selected_answer) : [];
     currentQuestionState = null;
     aiThreadId = null;
     questionOpenedAt = Date.now();
-
-    var attempt = attemptsByQuestion[question.id] || null;
-    if (attempt) selectedAnswer = TaxPracticeLogic.normalizeAnswer(attempt.selected_answer);
 
     var title = '税法练习';
     if (dashboard && session.chapter_id) {
@@ -278,27 +315,41 @@ var TaxPractice = (function () {
       (question.source_label ? ' · ' + question.source_label : '');
     byId('taxQuestionStem').textContent = question.stem;
 
+    byId('taxOptions').style.display = isSubjective ? 'none' : 'grid';
+    byId('taxSubjectiveAction').style.display = isSubjective ? 'block' : 'none';
+    byId('taxRevealSubjectiveBtn').disabled = !!review;
+    byId('taxRevealSubjectiveBtn').textContent = review ? '已显示答案及解析' : '显示答案及解析';
     renderOptions(question, attempt);
     byId('taxPrevBtn').disabled = currentIndex === 0;
-    byId('taxNextBtn').textContent = currentIndex === questions.length - 1 ? '完成练习' : '下一题';
-    byId('taxResultCard').style.display = attempt ? 'block' : 'none';
-    byId('taxAiCard').style.display = attempt ? 'block' : 'none';
+    byId('taxNextBtn').textContent = currentIndex === questions.length - 1 ? '完成专题' : '下一题';
+
+    var showResult = isSubjective ? !!review : !!attempt;
+    var canUseAi = showResult;
+    byId('taxResultCard').style.display = showResult ? 'block' : 'none';
+    byId('taxAiCard').style.display = canUseAi ? 'block' : 'none';
     byId('taxAiMessages').innerHTML = '';
     byId('taxAiInput').value = '';
 
     var submit = byId('taxSubmitBtn');
+    submit.style.display = isSubjective ? 'none' : 'block';
     submit.disabled = !selectedAnswer.length || !!attempt;
     submit.textContent = attempt ? '已提交' : '提交答案';
 
-    if (attempt) renderResult(question, attempt);
+    if (showResult) renderResult(question, attempt);
     loadQuestionState(question.id);
-    if (attempt) loadAiHistory(question.id);
+    if (canUseAi) loadAiHistory(question.id);
+    renderAnswerCard();
   }
 
   function renderOptions(question, attempt) {
     var html = '';
+    if (TaxPracticeLogic.isSubjectiveType(question.question_type)) {
+      byId('taxOptions').innerHTML = '';
+      return;
+    }
     var selected = attempt ? TaxPracticeLogic.normalizeAnswer(attempt.selected_answer) : selectedAnswer;
     var correct = TaxPracticeLogic.normalizeAnswer(question.correct_answer);
+    var locked = !!attempt;
 
     for (var i = 0; i < question.options.length; i++) {
       var option = question.options[i];
@@ -307,7 +358,7 @@ var TaxPractice = (function () {
       if (attempt && correct.indexOf(option.label) >= 0) classes.push('correct');
       if (attempt && selected.indexOf(option.label) >= 0 && correct.indexOf(option.label) < 0) classes.push('wrong');
       html += '<button class="' + classes.join(' ') + '" type="button" data-tax-option="' +
-        TaxPracticeLogic.escapeHtml(option.label) + '"' + (attempt ? ' disabled' : '') + '>' +
+        TaxPracticeLogic.escapeHtml(option.label) + '"' + (locked ? ' disabled' : '') + '>' +
         '<span class="tax-option-label">' + TaxPracticeLogic.escapeHtml(option.label) + '</span>' +
         '<span class="tax-option-text">' + TaxPracticeLogic.escapeHtml(option.text) + '</span>' +
         '</button>';
@@ -336,33 +387,62 @@ var TaxPractice = (function () {
     byId('taxSubmitBtn').disabled = !selectedAnswer.length;
   }
 
+  function revealSubjectiveAnswer() {
+    var question = questions[currentIndex];
+    if (!question || !TaxPracticeLogic.isSubjectiveType(question.question_type) || reviewsByQuestion[question.id]) return;
+    var button = byId('taxRevealSubjectiveBtn');
+    button.disabled = true;
+    button.textContent = '保存中...';
+
+    TaxPracticeData.recordSubjectiveReview(session.id, question.id)
+      .then(function (result) {
+        if (!result) throw new Error('主观题完成记录保存后没有返回结果。');
+        reviewsByQuestion[question.id] = {
+          id: result.review_id,
+          question_id: question.id,
+          viewed_at: result.viewed_at
+        };
+        if (questions[currentIndex] && questions[currentIndex].id === question.id) renderQuestion();
+        renderAnswerCard();
+        showToast('已保存主观题进度', 'success');
+      })
+      .catch(function (error) {
+        button.disabled = false;
+        button.textContent = '显示答案及解析';
+        showToast(error.message || '主观题进度保存失败', 'error');
+      });
+  }
+
   function submitAnswer() {
     var question = questions[currentIndex];
-    if (!question || !selectedAnswer.length || attemptsByQuestion[question.id]) return;
+    if (!question || TaxPracticeLogic.isSubjectiveType(question.question_type) ||
+        !selectedAnswer.length || attemptsByQuestion[question.id]) return;
 
+    var answer = selectedAnswer.slice();
+    var duration = Math.max(0, Math.round((Date.now() - questionOpenedAt) / 1000));
     var submit = byId('taxSubmitBtn');
     submit.disabled = true;
     submit.textContent = '保存中...';
-    var duration = Math.round((Date.now() - questionOpenedAt) / 1000);
 
-    TaxPracticeData.recordAnswer(session.id, question.id, selectedAnswer, duration)
+    TaxPracticeData.recordAnswer(session.id, question.id, answer, duration)
       .then(function (result) {
         if (!result) throw new Error('答案保存后没有返回判题结果。');
-        var attempt = {
+        attemptsByQuestion[question.id] = {
           id: result.attempt_id,
           question_id: question.id,
-          selected_answer: selectedAnswer.slice(),
+          selected_answer: answer,
           is_correct: result.is_correct
         };
-        attemptsByQuestion[question.id] = attempt;
-        renderOptions(question, attempt);
-        renderResult(question, attempt);
-        submit.textContent = '已提交';
-        byId('taxResultCard').style.display = 'block';
-        byId('taxAiCard').style.display = 'block';
-        loadQuestionState(question.id);
-        loadAiHistory(question.id);
+        return TaxPracticeData.refreshSessionCounts(session.id).catch(function () { return null; });
+      })
+      .then(function (counts) {
+        if (counts) {
+          session.answered_count = counts.answered_count;
+          session.correct_count = counts.correct_count;
+        }
+        if (questions[currentIndex] && questions[currentIndex].id === question.id) renderQuestion();
         renderAnswerCard();
+        showToast('答案已保存', 'success');
       })
       .catch(function (error) {
         submit.disabled = false;
@@ -373,6 +453,19 @@ var TaxPractice = (function () {
 
   function renderResult(question, attempt) {
     var resultTitle = byId('taxResultTitle');
+    if (TaxPracticeLogic.isSubjectiveType(question.question_type)) {
+      resultTitle.textContent = '已查看原书答案';
+      resultTitle.className = 'tax-result-title reviewed';
+      byId('taxUserAnswerLine').style.display = 'none';
+      byId('taxCorrectAnswerLine').style.display = 'none';
+      byId('taxExplanationTitle').textContent = '原书答案及解析';
+      byId('taxExplanation').textContent = question.explanation || '原文未提供答案及解析。';
+      return;
+    }
+
+    byId('taxUserAnswerLine').style.display = 'flex';
+    byId('taxCorrectAnswerLine').style.display = 'flex';
+    byId('taxExplanationTitle').textContent = '答案解析';
     resultTitle.textContent = attempt.is_correct ? '回答正确' : '回答错误';
     resultTitle.className = 'tax-result-title ' + (attempt.is_correct ? 'correct' : 'wrong');
     byId('taxUserAnswer').textContent =
@@ -444,14 +537,30 @@ var TaxPractice = (function () {
       return;
     }
 
-    TaxPracticeData.completeSession(session.id).then(function () {
-      showToast('本次练习已完成', 'success');
-      session = null;
-      questions = [];
-      attemptsByQuestion = {};
+    var completedCount = countCompletedQuestions();
+    if (completedCount < questions.length) {
+      showToast('还有 ' + (questions.length - completedCount) + ' 题未完成，进度已保留。', 'error');
+      openAnswerCard();
+      return;
+    }
+
+    if (session.status === 'completed') {
       showHome();
       loadHome();
-    }).catch(showToastError);
+      return;
+    }
+    TaxPracticeData.completeSession(session.id)
+      .then(function () {
+        session.status = 'completed';
+        showToast('本专题本轮已完成', 'success');
+        session = null;
+        questions = [];
+        attemptsByQuestion = {};
+        reviewsByQuestion = {};
+        showHome();
+        loadHome();
+      })
+      .catch(showToastError);
   }
 
   function exitPractice() {
@@ -483,10 +592,16 @@ var TaxPractice = (function () {
     var html = '';
     var answered = 0;
     for (var i = 0; i < questions.length; i++) {
-      var attempt = attemptsByQuestion[questions[i].id];
+      var question = questions[i];
+      var attempt = attemptsByQuestion[question.id];
+      var review = reviewsByQuestion[question.id];
       var classes = [];
       if (i === currentIndex) classes.push('current');
-      if (attempt) {
+      if (TaxPracticeLogic.isSubjectiveType(question.question_type) && review) {
+        answered++;
+        classes.push('reviewed');
+      }
+      else if (attempt) {
         answered++;
         classes.push(attempt.is_correct ? 'correct' : 'wrong');
       }
@@ -495,6 +610,24 @@ var TaxPractice = (function () {
     }
     grid.innerHTML = html;
     byId('taxAnswerCardSummary').textContent = answered + ' / ' + questions.length + ' 已作答';
+    byId('taxAnswerCardLegend').innerHTML =
+      '<span><i class="current"></i>当前</span><span><i class="correct"></i>正确</span>' +
+      '<span><i class="wrong"></i>错误</span><span><i class="reviewed"></i>已查看</span>' +
+      '<span><i></i>未作答</span>';
+  }
+
+  function countCompletedQuestions() {
+    var count = 0;
+    for (var i = 0; i < questions.length; i++) {
+      var question = questions[i];
+      if (TaxPracticeLogic.isSubjectiveType(question.question_type)) {
+        if (reviewsByQuestion[question.id]) count++;
+      }
+      else if (attemptsByQuestion[question.id]) {
+        count++;
+      }
+    }
+    return count;
   }
 
   function openCollection(kind) {
@@ -529,14 +662,15 @@ var TaxPractice = (function () {
       var item = collectionItems[i];
       var question = item.question;
       var note = item.state && item.state.note ? item.state.note : '';
+      var answerLabel = TaxPracticeLogic.isSubjectiveType(question.question_type)
+        ? '主观题 · 进入练习后查看原书答案'
+        : '标准答案 ' + TaxPracticeLogic.normalizeAnswer(question.correct_answer).join('、');
       html += '<div class="tax-collection-row">' +
         '<div class="tax-collection-index">' + (i + 1) + '</div>' +
         '<div class="tax-collection-main"><b>' +
         TaxPracticeLogic.escapeHtml(question.stem) + '</b>' +
         (note ? '<small>笔记：' + TaxPracticeLogic.escapeHtml(note) + '</small>' : '') +
-        '<span>标准答案 ' + TaxPracticeLogic.escapeHtml(
-          TaxPracticeLogic.normalizeAnswer(question.correct_answer).join('、')
-        ) + '</span></div>' +
+        '<span>' + TaxPracticeLogic.escapeHtml(answerLabel) + '</span></div>' +
         '<div class="tax-collection-actions">' +
         '<button type="button" data-tax-practice-one="' + TaxPracticeLogic.escapeHtml(question.id) + '">练习</button>' +
         (collectionKind === 'wrong'
@@ -605,7 +739,7 @@ var TaxPractice = (function () {
       var bubble = document.createElement('div');
       bubble.className = 'tax-ai-message ' + messages[i].role;
       var label = document.createElement('b');
-      label.textContent = messages[i].role === 'assistant' ? 'AI辅助解释' : '我的问题';
+      label.textContent = messages[i].role === 'assistant' ? 'GPT辅助解释' : '我的问题';
       var content = document.createElement('div');
       content.textContent = messages[i].content;
       bubble.appendChild(label);
@@ -618,8 +752,11 @@ var TaxPractice = (function () {
   function askAi() {
     var question = questions[currentIndex];
     var attempt = question ? attemptsByQuestion[question.id] : null;
+    var isSubjective = question && TaxPracticeLogic.isSubjectiveType(question.question_type);
     var message = byId('taxAiInput').value.trim();
-    if (!question || !attempt || !message) return;
+    if (!question || !message) return;
+    if (!isSubjective && !attempt) return;
+    if (isSubjective && !reviewsByQuestion[question.id]) return;
 
     var button = byId('taxAiSendBtn');
     button.disabled = true;
@@ -635,7 +772,7 @@ var TaxPractice = (function () {
           },
           body: JSON.stringify({
             questionId: question.id,
-            selectedAnswer: TaxPracticeLogic.normalizeAnswer(attempt.selected_answer),
+            selectedAnswer: attempt ? TaxPracticeLogic.normalizeAnswer(attempt.selected_answer) : [],
             message: message,
             threadId: aiThreadId
           })

@@ -35,7 +35,11 @@ var TaxPracticeLogic = (function () {
     return result;
   }
 
-  function calculateDashboard(chapters, states) {
+  function isSubjectiveType(type) {
+    return ['subjective', 'calculation', 'comprehensive'].indexOf(String(type || '')) >= 0;
+  }
+
+  function calculateDashboard(chapters, states, subjectiveStates, chapterSessions) {
     var stateByChapter = {};
     var totalAnswered = 0;
     var totalCorrectAttempts = 0;
@@ -58,19 +62,50 @@ var TaxPracticeLogic = (function () {
       totalAttempts += (state.correct_count || 0) + (state.wrong_count || 0);
     }
 
+    var subjectiveSeen = {};
+    for (var subjectiveIndex = 0; subjectiveIndex < (subjectiveStates || []).length; subjectiveIndex++) {
+      var subjectiveState = subjectiveStates[subjectiveIndex] || {};
+      var subjectiveChapterId = subjectiveState.chapter_id;
+      var subjectiveQuestionId = subjectiveState.question_id;
+      if (!subjectiveChapterId || !subjectiveQuestionId || subjectiveSeen[subjectiveQuestionId]) continue;
+      subjectiveSeen[subjectiveQuestionId] = true;
+      if (!stateByChapter[subjectiveChapterId]) {
+        stateByChapter[subjectiveChapterId] = { answered: 0, correctAttempts: 0, attempts: 0 };
+      }
+      stateByChapter[subjectiveChapterId].answered++;
+      totalAnswered++;
+    }
+
+    var latestSessionByChapter = {};
+    for (var sessionIndex = 0; sessionIndex < (chapterSessions || []).length; sessionIndex++) {
+      var chapterSession = chapterSessions[sessionIndex] || {};
+      if (!chapterSession.chapter_id || latestSessionByChapter[chapterSession.chapter_id]) continue;
+      latestSessionByChapter[chapterSession.chapter_id] = chapterSession;
+    }
+
     var chapterStats = [];
     var totalQuestions = 0;
     for (var j = 0; j < (chapters || []).length; j++) {
       var chapter = chapters[j];
       var stat = stateByChapter[chapter.id] || { answered: 0, correctAttempts: 0, attempts: 0 };
       var count = chapter.question_count || 0;
+      var latestChapterSession = latestSessionByChapter[chapter.id] || null;
+      var roundAnswered = latestChapterSession
+        ? Math.min(count, Math.max(0, latestChapterSession.answered_count || 0))
+        : stat.answered;
       totalQuestions += count;
       chapterStats.push({
         chapter: chapter,
-        answered: stat.answered,
+        answered: roundAnswered,
+        lifetimeAnswered: stat.answered,
+        latestSession: latestChapterSession,
         correctRate: stat.attempts ? Math.round(stat.correctAttempts * 100 / stat.attempts) : 0,
-        progressRate: count ? Math.min(100, Math.round(stat.answered * 100 / count)) : 0
+        progressRate: count ? Math.min(100, Math.round(roundAnswered * 100 / count)) : 0
       });
+    }
+
+    if ((chapterSessions || []).length) {
+      totalAnswered = chapterStats.reduce(function (sum, item) { return sum + item.answered; }, 0);
     }
 
     return {
@@ -83,6 +118,9 @@ var TaxPracticeLogic = (function () {
   }
 
   function formatQuestionType(type) {
+    if (type === 'calculation') return '计算问答题';
+    if (type === 'comprehensive') return '综合题';
+    if (type === 'subjective') return '主观题';
     return String(type || '').indexOf('multiple') >= 0 ? '多选题' : '单选题';
   }
 
@@ -103,6 +141,7 @@ var TaxPracticeLogic = (function () {
     normalizeAnswer: normalizeAnswer,
     isCorrect: isCorrect,
     shuffle: shuffle,
+    isSubjectiveType: isSubjectiveType,
     calculateDashboard: calculateDashboard,
     formatQuestionType: formatQuestionType,
     escapeHtml: escapeHtml,

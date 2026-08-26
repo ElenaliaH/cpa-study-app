@@ -1279,6 +1279,10 @@ body {
 .tax-chapter-section { padding-bottom: 14px; }
 .tax-section-header { align-items: center; gap: 12px; }
 .tax-section-header > div:first-child { display: grid; gap: 2px; }
+.tax-practice-settings {
+  display: flex; align-items: center; justify-content: flex-end;
+  gap: 8px; flex-wrap: wrap;
+}
 .tax-mode-control {
   display: inline-grid; grid-template-columns: 1fr 1fr;
   padding: 3px; border-radius: 8px; background: rgba(0,0,0,.045);
@@ -1294,14 +1298,28 @@ body {
 .tax-chapter-list { display: grid; }
 .tax-chapter-row {
   width: 100%; min-height: 72px; display: grid;
+  grid-template-columns: minmax(0, 1fr) 62px; align-items: stretch;
+  border-bottom: 1px solid var(--border);
+}
+.tax-chapter-row:last-child { border-bottom: none; }
+.tax-chapter-open {
+  min-width: 0; display: grid;
   grid-template-columns: 34px minmax(0, 1fr) 44px;
   gap: 12px; align-items: center; padding: 12px 4px;
-  border: none; border-bottom: 1px solid var(--border);
+  border: none;
   background: transparent; color: var(--text); text-align: left;
   font-family: var(--font); cursor: pointer;
 }
-.tax-chapter-row:last-child { border-bottom: none; }
-.tax-chapter-row:hover .tax-chapter-main b { color: var(--accent); }
+.tax-chapter-open:hover .tax-chapter-main b { color: var(--accent); }
+.tax-chapter-reset {
+  min-width: 0; display: grid; place-content: center; gap: 2px;
+  border: none; border-left: 1px solid var(--border);
+  background: transparent; color: var(--text-tertiary); cursor: pointer;
+  font-family: var(--font);
+}
+.tax-chapter-reset span { font-size: 19px; line-height: 1; }
+.tax-chapter-reset small { font-size: 10px; white-space: nowrap; }
+.tax-chapter-reset:hover { color: var(--accent); background: var(--accent-soft); }
 .tax-chapter-order {
   width: 30px; height: 30px; display: flex; align-items: center; justify-content: center;
   border-radius: 50%; background: var(--accent-soft); color: var(--accent);
@@ -1402,12 +1420,19 @@ body {
 .tax-option.wrong .tax-option-label { background: var(--red); border-color: var(--red); color: #fff; }
 .tax-submit-button { width: 100%; min-height: 44px; }
 .tax-submit-button:disabled { cursor: not-allowed; opacity: .45; transform: none; }
-
+.tax-subjective-action {
+  margin-bottom: 18px; padding: 14px;
+  border: 1px solid var(--border); border-radius: 8px; background: rgba(0,0,0,.025);
+  text-align: center;
+}
+.tax-subjective-action p { margin-bottom: 10px; color: var(--text-secondary); font-size: 13px; }
+.tax-subjective-action .btn { min-height: 42px; }
 .tax-result-title {
   margin-bottom: 14px; font-size: 18px; font-weight: 800; letter-spacing: 0;
 }
 .tax-result-title.correct { color: #1f7a3b; }
 .tax-result-title.wrong { color: #c32f27; }
+.tax-result-title.reviewed { color: #176b33; }
 .tax-answer-line {
   display: flex; justify-content: space-between; gap: 12px;
   padding: 8px 0; border-bottom: 1px solid var(--border); font-size: 13px;
@@ -1528,6 +1553,7 @@ body {
 .tax-answer-card-grid button.current { outline: 2px solid var(--accent); outline-offset: 1px; }
 .tax-answer-card-grid button.correct { background: var(--green-soft); border-color: #6fcf8a; color: #176b33; }
 .tax-answer-card-grid button.wrong { background: var(--red-soft); border-color: #ff9f99; color: #b42318; }
+.tax-answer-card-grid button.reviewed { background: #eef7f0; border-color: #6fcf8a; color: #176b33; }
 .tax-answer-card-legend {
   display: flex; flex-wrap: wrap; gap: 10px 14px; margin-top: 16px;
   color: var(--text-secondary); font-size: 11px;
@@ -1540,6 +1566,7 @@ body {
 .tax-answer-card-legend i.current { outline: 2px solid var(--accent); }
 .tax-answer-card-legend i.correct { background: var(--green-soft); border-color: #6fcf8a; }
 .tax-answer-card-legend i.wrong { background: var(--red-soft); border-color: #ff9f99; }
+.tax-answer-card-legend i.reviewed { background: #eef7f0; border-color: #6fcf8a; }
 
 .tax-toast {
   position: fixed; left: 50%; bottom: max(24px, env(safe-area-inset-bottom));
@@ -1570,9 +1597,12 @@ body {
   .tax-library-actions > button { min-height: 62px; }
   .tax-section-header { align-items: flex-start; flex-wrap: wrap; }
   .tax-section-header > div:first-child { min-width: 0; flex: 1; }
+  .tax-practice-settings { width: 100%; justify-content: space-between; }
   .tax-chapter-section { max-width: 100%; overflow: hidden; }
   .tax-section-header .section-meta { font-size: 11px; }
-  .tax-chapter-row { grid-template-columns: 32px minmax(0, 1fr) 38px; gap: 8px; }
+  .tax-chapter-row { grid-template-columns: minmax(0, 1fr) 54px; }
+  .tax-chapter-open { grid-template-columns: 32px minmax(0, 1fr) 38px; gap: 8px; }
+  .tax-chapter-reset small { font-size: 9px; }
   .tax-question-stem { font-size: 16px; line-height: 1.7; }
   .tax-question-card, .tax-result-card, .tax-ai-card { padding: 18px 14px; }
   .tax-note-editor, .tax-ai-input-row { grid-template-columns: 1fr; }

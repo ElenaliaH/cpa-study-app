@@ -52,7 +52,21 @@ test('calculates per-chapter and total progress', function () {
   assert.strictEqual(dashboard.chapters[0].correctRate, 67);
 });
 
+test('uses latest chapter session for resettable round progress', function () {
+  const dashboard = logic.calculateDashboard(
+    [{ id: 'one', question_count: 10 }],
+    [{ question_id: 'q1', chapter_id: 'one', correct_count: 3, wrong_count: 0 }],
+    [{ question_id: 's1', chapter_id: 'one' }],
+    [{ chapter_id: 'one', answered_count: 0, status: 'active' }]
+  );
+  assert.strictEqual(dashboard.chapters[0].lifetimeAnswered, 2);
+  assert.strictEqual(dashboard.chapters[0].answered, 0);
+  assert.strictEqual(dashboard.chapters[0].progressRate, 0);
+});
+
 test('formats inferred question types', function () {
   assert.strictEqual(logic.formatQuestionType('multiple_choice_inferred'), '多选题');
   assert.strictEqual(logic.formatQuestionType('single_choice_inferred'), '单选题');
+  assert.strictEqual(logic.formatQuestionType('calculation'), '计算问答题');
+  assert.strictEqual(logic.formatQuestionType('comprehensive'), '综合题');
 });

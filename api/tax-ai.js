@@ -2,6 +2,8 @@ const crypto = require('crypto');
 
 const MAX_MESSAGE_LENGTH = 600;
 const MAX_HISTORY_MESSAGES = 12;
+const OPENAI_TIMEOUT_MS = 45000;
+const SUBJECTIVE_TYPES = new Set(['subjective', 'calculation', 'comprehensive']);
 
 function sendJson(res, status, body) {
   res.status(status).json(body);
@@ -104,11 +106,16 @@ async function getQuestionAndAttempt(config, token, userId, questionId) {
   const questionRows = await supabaseRequest(
     config,
     '/rest/v1/tax_questions?id=eq.' + encodedId +
-      '&is_published=eq.true&select=id,stem,options,correct_answer,explanation',
+      '&is_published=eq.true&select=id,question_type,stem,options,correct_answer,answer_raw,explanation',
     token
   );
   if (!Array.isArray(questionRows) || !questionRows[0]) {
     throw new Error('Published question not found.');
+  }
+
+  const question = questionRows[0];
+  if (SUBJECTIVE_TYPES.has(question.question_type)) {
+    return { question, attempt: null };
   }
 
   const attemptRows = await supabaseRequest(
@@ -122,7 +129,7 @@ async function getQuestionAndAttempt(config, token, userId, questionId) {
     throw new Error('Please answer this question before asking AI.');
   }
 
-  return { question: questionRows[0], attempt: attemptRows[0] };
+  return { question, attempt: attemptRows[0] };
 }
 
 async function getOrCreateThread(config, token, userId, questionId, requestedThreadId) {
@@ -176,9 +183,10 @@ async function loadHistory(config, token, threadId) {
 }
 
 function buildPrompt(question, selectedAnswer, history, currentMessage) {
+  const isSubjective = SUBJECTIVE_TYPES.has(question.question_type);
   const options = (question.options || [])
     .map((option) => option.label + '. ' + option.text)
-    .join('\n');
+    .join('\n') || '本题为主观题，没有选择项。';
   const conversation = (history || [])
     .map((item) => (item.role === 'assistant' ? 'AI辅助解释' : '用户') + '：' + item.content)
     .join('\n\n');
@@ -187,16 +195,21 @@ function buildPrompt(question, selectedAnswer, history, currentMessage) {
     '【原题，不可修改】',
     question.stem,
     '',
+    '【题型】',
+    question.question_type,
+    '',
     '【选项】',
     options,
     '',
     '【用户真实作答】',
-    (selectedAnswer || []).join('、') || '未作答',
+    isSubjective ? '主观题自测，用户未提交文字答案。' : ((selectedAnswer || []).join('、') || '未作答'),
     '',
     '【标准答案，不可修改】',
-    (question.correct_answer || []).join('、'),
+    isSubjective
+      ? '主观题没有选择项标准答案，请严格依据下方原书答案及解析。'
+      : (question.correct_answer || []).join('、'),
     '',
-    '【原解析，不可修改】',
+    isSubjective ? '【原书答案及解析，不可修改】' : '【原解析，不可修改】',
     question.explanation || '原题未提供解析',
     conversation ? '\n【此前围绕本题的问答】\n' + conversation : '',
     '',
@@ -221,23 +234,31 @@ function getInstructions() {
 }
 
 async function callOpenAi(config, prompt, safetyIdentifier) {
-  const response = await fetch('https://api.openai.com/v1/responses', {
-    method: 'POST',
-    headers: {
-      Authorization: 'Bearer ' + config.openAiKey,
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify({
-      model: config.model,
-      instructions: getInstructions(),
-      input: prompt,
-      store: false,
-      max_output_tokens: 900,
-      reasoning: { effort: 'low' },
-      text: { verbosity: 'low' },
-      safety_identifier: safetyIdentifier
-    })
-  });
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), OPENAI_TIMEOUT_MS);
+  let response;
+  try {
+    response = await fetch('https://api.openai.com/v1/responses', {
+      method: 'POST',
+      headers: {
+        Authorization: 'Bearer ' + config.openAiKey,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        model: config.model,
+        instructions: getInstructions(),
+        input: prompt,
+        store: false,
+        max_output_tokens: 900,
+        reasoning: { effort: 'low' },
+        text: { verbosity: 'low' },
+        safety_identifier: safetyIdentifier
+      }),
+      signal: controller.signal
+    });
+  } finally {
+    clearTimeout(timeout);
+  }
 
   const body = await response.json().catch(() => ({}));
   if (!response.ok) {
@@ -313,7 +334,7 @@ module.exports = async function handler(req, res) {
     const history = await loadHistory(config, token, threadId);
     const prompt = buildPrompt(
       context.question,
-      context.attempt.selected_answer,
+      context.attempt ? context.attempt.selected_answer : [],
       history.slice(0, -1),
       message
     );
