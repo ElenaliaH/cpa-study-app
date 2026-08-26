@@ -3,7 +3,6 @@ const assert = require('assert');
 process.env.OPENAI_API_KEY = 'test-only-openai-key';
 process.env.OPENAI_MODEL = 'gpt-5.4-mini';
 process.env.SUPABASE_URL = 'https://example.supabase.co';
-process.env.SUPABASE_PUBLISHABLE_KEY = 'test-only-publishable-key';
 process.env.TAX_AI_DAILY_LIMIT = '20';
 
 class MockResponse {
@@ -143,6 +142,7 @@ function createResponse() {
     method: 'POST',
     headers: {
       authorization: 'Bearer test-user-token',
+      'x-supabase-publishable-key': 'test-only-publishable-key',
       host: 'localhost:3000',
       origin: 'http://localhost:3000'
     },
@@ -161,6 +161,8 @@ function createResponse() {
   assert.strictEqual(res.body.messages.at(-1).role, 'assistant');
   assert.ok(calls.some((call) => call.url === 'https://api.openai.com/v1/responses'));
   assert.ok(!JSON.stringify(res.body).includes(process.env.OPENAI_API_KEY));
+  assert.ok(calls.filter((call) => call.url.startsWith(process.env.SUPABASE_URL))
+    .every((call) => call.options.headers.apikey === 'test-only-publishable-key'));
 
   const openAiCall = calls.find((call) => call.url === 'https://api.openai.com/v1/responses');
   const openAiBody = JSON.parse(openAiCall.options.body);
@@ -217,6 +219,25 @@ function createResponse() {
   assert.ok(gradeOpenAiBody.input.includes('【原书答案及解析，不可修改】'));
   assert.ok(calls.some((call) => call.url.includes('/tax_subjective_attempts?on_conflict=')));
   assert.ok(calls.some((call) => call.url.includes('/rpc/record_tax_subjective_review')));
+
+  const healthRes = createResponse();
+  await handler({ method: 'GET', headers: {} }, healthRes);
+  assert.strictEqual(healthRes.statusCode, 200);
+  assert.strictEqual(healthRes.body.status, 'ready');
+  assert.ok(!JSON.stringify(healthRes.body).includes(process.env.OPENAI_API_KEY));
+
+  const openAiKey = process.env.OPENAI_API_KEY;
+  delete process.env.OPENAI_API_KEY;
+  const missingConfigRes = createResponse();
+  await handler({ method: 'GET', headers: {} }, missingConfigRes);
+  assert.strictEqual(missingConfigRes.statusCode, 503);
+  assert.strictEqual(missingConfigRes.body.status, 'configuration_required');
+
+  const unauthenticatedRes = createResponse();
+  await handler({ method: 'POST', headers: {}, body: {} }, unauthenticatedRes);
+  assert.strictEqual(unauthenticatedRes.statusCode, 401);
+  assert.strictEqual(unauthenticatedRes.body.error, '请先登录。');
+  process.env.OPENAI_API_KEY = openAiKey;
 
   process.stdout.write('PASS AI endpoint verifies context, grades subjective answers, and keeps secrets server-side\n');
 })().catch(function (error) {

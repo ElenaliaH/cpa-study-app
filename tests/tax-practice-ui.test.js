@@ -48,6 +48,10 @@ test('supports deliberate horizontal swipe without blocking vertical scroll', fu
 
 test('renders AI pending and persistent failure states and sends ask action', function () {
   assert(ui.includes("action: 'ask'"));
+  assert(ui.includes('getAiRequestCredentials'));
+  assert(ui.includes("'X-Supabase-Publishable-Key'"));
+  assert(data.includes('getAiRequestCredentials: getAiRequestCredentials'));
+  assert(demo.includes('getAiRequestCredentials: function ()'));
   assert(ui.includes('GPT 正在生成'));
   assert(ui.includes("error: true"));
   assert(ui.includes('AI解释生成超时，请重新发送'));

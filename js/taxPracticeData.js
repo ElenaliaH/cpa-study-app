@@ -474,6 +474,17 @@ var TaxPracticeData = (function () {
     });
   }
 
+  function getAiRequestCredentials() {
+    return getAccessToken().then(function (accessToken) {
+      var publishableKey = String(supabaseClient && supabaseClient.supabaseKey || '').trim();
+      if (!publishableKey) throw new Error('登录校验配置不可用，请刷新页面后重试。');
+      return {
+        accessToken: accessToken,
+        publishableKey: publishableKey
+      };
+    });
+  }
+
   return {
     loadDashboard: loadDashboard,
     getLatestSession: getLatestSession,
@@ -499,6 +510,7 @@ var TaxPracticeData = (function () {
     removeFromWrongBook: removeFromWrongBook,
     getCollection: getCollection,
     getAiHistory: getAiHistory,
-    getAccessToken: getAccessToken
+    getAccessToken: getAccessToken,
+    getAiRequestCredentials: getAiRequestCredentials
   };
 })();
