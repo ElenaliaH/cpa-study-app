@@ -116,12 +116,21 @@ if ($Publish) {
     $encoded = [Uri]::EscapeDataString($chapterId)
     $published = @(
       Invoke-SupabaseJson GET (
-        '/rest/v1/tax_questions?chapter_id=eq.' + $encoded + '&is_published=eq.true&select=id&limit=1000'
+        '/rest/v1/tax_questions?chapter_id=eq.' + $encoded +
+        '&is_published=eq.true&select=id,question_type&limit=1000'
       ) $headers $null
     )
+    $subjectiveCount = @($published | Where-Object {
+      $_.question_type -in @('subjective', 'calculation', 'comprehensive')
+    }).Count
+    $objectiveCount = $published.Count - $subjectiveCount
     Invoke-SupabaseJson PATCH (
       '/rest/v1/tax_chapters?id=eq.' + $encoded
-    ) $headers @{ question_count = $published.Count } | Out-Null
+    ) $headers @{
+      question_count = $published.Count
+      objective_question_count = $objectiveCount
+      subjective_question_count = $subjectiveCount
+    } | Out-Null
   }
 }
 

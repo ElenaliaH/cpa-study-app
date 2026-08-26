@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "scripts": {
     "build:supabase": "esbuild tools/supabase-shim.js --bundle --format=iife --outfile=js/vendor/supabase.js",
-    "test": "node tests/tax-practice-logic.test.js && node tests/tax-practice-migration.test.js && node tests/tax-batch-subjective-migration.test.js && node tests/tax-bank-output.test.js && node tests/tax-subjective-output.test.js && node tests/tax-ai-api.test.js"
+    "test": "node tests/tax-practice-logic.test.js && node tests/tax-practice-migration.test.js && node tests/tax-existing-rpc-hardening-migration.test.js && node tests/tax-batch-subjective-migration.test.js && node tests/tax-subjective-grading-migration.test.js && node tests/tax-subjective-rpc-hardening-migration.test.js && node tests/tax-bank-output.test.js && node tests/tax-subjective-output.test.js && node tests/tax-ai-api.test.js"
   },
   "devDependencies": {
     "@supabase/supabase-js": "^2.110.1",

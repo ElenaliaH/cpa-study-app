@@ -14,7 +14,7 @@
   <link rel="apple-touch-icon" href="icon.svg">
   <link rel="icon" href="icon.svg">
 
-  <link rel="stylesheet" href="css/style.css?v=20260826b">
+  <link rel="stylesheet" href="css/style.css?v=20260826d">
 
   <!-- Supabase SDK（本地构建） -->
   <script src="js/vendor/supabase.js"></script>
@@ -312,10 +312,26 @@
           <div class="tax-question-stem" id="taxQuestionStem"></div>
           <div class="tax-options" id="taxOptions"></div>
           <div class="tax-subjective-action" id="taxSubjectiveAction" style="display:none;">
-            <p>先独立完成，再查看原书答案及解析。</p>
-            <button class="btn btn-primary" id="taxRevealSubjectiveBtn" type="button">显示答案及解析</button>
+            <label for="taxSubjectiveAnswerInput">我的作答</label>
+            <textarea id="taxSubjectiveAnswerInput" maxlength="6000" rows="8" placeholder="写下计算过程、判断依据和最终结论"></textarea>
+            <div class="tax-subjective-buttons">
+              <button class="btn btn-primary" id="taxGradeSubjectiveBtn" type="button">GPT辅助批改</button>
+              <button class="btn btn-ghost" id="taxRevealSubjectiveBtn" type="button">直接查看原书答案</button>
+            </div>
+            <p>AI批改仅作辅助，请以原书答案和解析为准。</p>
           </div>
           <button class="btn btn-primary tax-submit-button" id="taxSubmitBtn" type="button">提交答案</button>
+        </div>
+
+        <div class="section-card tax-grade-card" id="taxGradeCard" style="display:none;">
+          <div class="tax-grade-header">
+            <div>
+              <h2>GPT 辅助批改</h2>
+              <span>不修改原书答案和解析</span>
+            </div>
+            <strong id="taxGradeScore">--</strong>
+          </div>
+          <div class="tax-grade-content" id="taxGradeContent"></div>
         </div>
 
         <div class="section-card tax-result-card" id="taxResultCard" style="display:none;">
@@ -435,6 +451,28 @@
     </div>
   </div>
 
+  <div class="modal-overlay" id="taxScopeOverlay" style="display:none;">
+    <div class="modal-card tax-scope-modal" role="dialog" aria-modal="true" aria-labelledby="taxScopeTitle">
+      <div class="tax-scope-header">
+        <div>
+          <h2 id="taxScopeTitle">选择题型</h2>
+          <span id="taxScopeChapterTitle"></span>
+        </div>
+        <button class="tax-icon-button" id="taxScopeCloseBtn" type="button" aria-label="关闭题型选择">×</button>
+      </div>
+      <div class="tax-scope-options">
+        <button type="button" data-tax-scope="objective">
+          <b>客观题</b>
+          <span id="taxObjectiveScopeMeta">0 道题</span>
+        </button>
+        <button type="button" data-tax-scope="subjective">
+          <b>主观题</b>
+          <span id="taxSubjectiveScopeMeta">0 道题</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
   <div class="tax-toast" id="taxToast" role="status" style="display:none;"></div>
 
   <script src="js/store.js"></script>
@@ -449,15 +487,15 @@
   <script src="js/checkin.js"></script>
   <script src="js/subjects.js"></script>
   <script src="js/focus.js"></script>
-  <script src="js/taxPracticeLogic.js?v=20260826b"></script>
-  <script src="js/taxPracticeData.js?v=20260826b"></script>
-  <script src="js/taxPractice.js?v=20260826b"></script>
+  <script src="js/taxPracticeLogic.js?v=20260826d"></script>
+  <script src="js/taxPracticeData.js?v=20260826d"></script>
+  <script src="js/taxPractice.js?v=20260826d"></script>
   <script>
     if (
       (location.hostname === 'localhost' || location.hostname === '127.0.0.1') &&
       new URLSearchParams(location.search).get('taxDemo') === '1'
     ) {
-      document.write('<script src="tests/tax-practice-demo.js?v=20260826c"><\/script>');
+      document.write('<script src="tests/tax-practice-demo.js?v=20260826d"><\/script>');
     }
   </script>
   <script src="js/app.js"></script>

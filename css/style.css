@@ -1423,10 +1423,37 @@ body {
 .tax-subjective-action {
   margin-bottom: 18px; padding: 14px;
   border: 1px solid var(--border); border-radius: 8px; background: rgba(0,0,0,.025);
-  text-align: center;
+  text-align: left;
 }
-.tax-subjective-action p { margin-bottom: 10px; color: var(--text-secondary); font-size: 13px; }
+.tax-subjective-action label {
+  display: block; margin-bottom: 8px; color: var(--text); font-size: 14px; font-weight: 700;
+}
+.tax-subjective-action textarea {
+  width: 100%; min-height: 170px; resize: vertical; padding: 12px;
+  border: 1px solid var(--border-strong); border-radius: 8px;
+  background: var(--surface-solid); color: var(--text); font: 14px/1.7 var(--font);
+}
+.tax-subjective-buttons {
+  display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 8px; margin-top: 10px;
+}
+.tax-subjective-action p { margin-top: 10px; color: var(--text-secondary); font-size: 12px; }
 .tax-subjective-action .btn { min-height: 42px; }
+.tax-grade-card { border-left: 4px solid var(--accent); }
+.tax-grade-header {
+  display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 16px;
+}
+.tax-grade-header h2 { font-size: 16px; letter-spacing: 0; }
+.tax-grade-header span { color: var(--text-secondary); font-size: 12px; }
+.tax-grade-header strong {
+  min-width: 64px; color: var(--accent); font-size: 24px; text-align: right; letter-spacing: 0;
+}
+.tax-grade-content { display: grid; gap: 14px; }
+.tax-grade-section { display: grid; gap: 5px; }
+.tax-grade-section h3 { font-size: 14px; letter-spacing: 0; }
+.tax-grade-section p, .tax-grade-section li {
+  color: #343438; font-size: 14px; line-height: 1.7; overflow-wrap: anywhere;
+}
+.tax-grade-section ul { display: grid; gap: 4px; padding-left: 20px; }
 .tax-result-title {
   margin-bottom: 14px; font-size: 18px; font-weight: 800; letter-spacing: 0;
 }
@@ -1568,6 +1595,23 @@ body {
 .tax-answer-card-legend i.wrong { background: var(--red-soft); border-color: #ff9f99; }
 .tax-answer-card-legend i.reviewed { background: #eef7f0; border-color: #6fcf8a; }
 
+.tax-scope-modal { width: min(440px, calc(100vw - 28px)); }
+.tax-scope-header {
+  display: flex; align-items: center; justify-content: space-between; gap: 14px; margin-bottom: 18px;
+}
+.tax-scope-header h2 { font-size: 18px; letter-spacing: 0; }
+.tax-scope-header span { color: var(--text-secondary); font-size: 12px; }
+.tax-scope-options { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.tax-scope-options > button {
+  min-height: 92px; display: grid; place-content: center; gap: 6px;
+  padding: 14px; border: 1px solid var(--border-strong); border-radius: 8px;
+  background: var(--surface-solid); color: var(--text); cursor: pointer; font-family: var(--font);
+}
+.tax-scope-options > button:hover:not(:disabled) { border-color: var(--accent); background: var(--accent-soft); }
+.tax-scope-options > button:disabled { opacity: .45; cursor: not-allowed; }
+.tax-scope-options b { font-size: 16px; letter-spacing: 0; }
+.tax-scope-options span { color: var(--text-secondary); font-size: 12px; }
+
 .tax-toast {
   position: fixed; left: 50%; bottom: max(24px, env(safe-area-inset-bottom));
   z-index: 12000; transform: translateX(-50%);
@@ -1604,7 +1648,9 @@ body {
   .tax-chapter-open { grid-template-columns: 32px minmax(0, 1fr) 38px; gap: 8px; }
   .tax-chapter-reset small { font-size: 9px; }
   .tax-question-stem { font-size: 16px; line-height: 1.7; }
-  .tax-question-card, .tax-result-card, .tax-ai-card { padding: 18px 14px; }
+  .tax-question-card, .tax-result-card, .tax-ai-card, .tax-grade-card { padding: 18px 14px; }
+  .tax-subjective-buttons, .tax-scope-options { grid-template-columns: 1fr; }
+  .tax-grade-header { align-items: flex-start; }
   .tax-note-editor, .tax-ai-input-row { grid-template-columns: 1fr; }
   .tax-note-editor .btn, .tax-ai-input-row .btn { width: 100%; }
   .tax-ai-message { width: 94%; }

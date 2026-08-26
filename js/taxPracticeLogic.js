@@ -50,10 +50,15 @@ var TaxPracticeLogic = (function () {
       var chapterId = state.chapter_id;
       if (!chapterId) continue;
       if (!stateByChapter[chapterId]) {
-        stateByChapter[chapterId] = { answered: 0, correctAttempts: 0, attempts: 0 };
+        stateByChapter[chapterId] = {
+          objectiveAnswered: 0,
+          subjectiveAnswered: 0,
+          correctAttempts: 0,
+          attempts: 0
+        };
       }
       if ((state.correct_count || 0) + (state.wrong_count || 0) > 0) {
-        stateByChapter[chapterId].answered++;
+        stateByChapter[chapterId].objectiveAnswered++;
         totalAnswered++;
       }
       stateByChapter[chapterId].correctAttempts += state.correct_count || 0;
@@ -70,35 +75,76 @@ var TaxPracticeLogic = (function () {
       if (!subjectiveChapterId || !subjectiveQuestionId || subjectiveSeen[subjectiveQuestionId]) continue;
       subjectiveSeen[subjectiveQuestionId] = true;
       if (!stateByChapter[subjectiveChapterId]) {
-        stateByChapter[subjectiveChapterId] = { answered: 0, correctAttempts: 0, attempts: 0 };
+        stateByChapter[subjectiveChapterId] = {
+          objectiveAnswered: 0,
+          subjectiveAnswered: 0,
+          correctAttempts: 0,
+          attempts: 0
+        };
       }
-      stateByChapter[subjectiveChapterId].answered++;
+      stateByChapter[subjectiveChapterId].subjectiveAnswered++;
       totalAnswered++;
     }
 
     var latestSessionByChapter = {};
+    var latestSessionByScope = {};
     for (var sessionIndex = 0; sessionIndex < (chapterSessions || []).length; sessionIndex++) {
       var chapterSession = chapterSessions[sessionIndex] || {};
-      if (!chapterSession.chapter_id || latestSessionByChapter[chapterSession.chapter_id]) continue;
-      latestSessionByChapter[chapterSession.chapter_id] = chapterSession;
+      if (!chapterSession.chapter_id) continue;
+      if (!latestSessionByChapter[chapterSession.chapter_id]) {
+        latestSessionByChapter[chapterSession.chapter_id] = chapterSession;
+      }
+      var scope = chapterSession.question_scope || 'objective';
+      var scopeKey = chapterSession.chapter_id + ':' + scope;
+      if (!latestSessionByScope[scopeKey]) latestSessionByScope[scopeKey] = chapterSession;
     }
 
     var chapterStats = [];
     var totalQuestions = 0;
     for (var j = 0; j < (chapters || []).length; j++) {
       var chapter = chapters[j];
-      var stat = stateByChapter[chapter.id] || { answered: 0, correctAttempts: 0, attempts: 0 };
-      var count = chapter.question_count || 0;
+      var stat = stateByChapter[chapter.id] || {
+        objectiveAnswered: 0,
+        subjectiveAnswered: 0,
+        correctAttempts: 0,
+        attempts: 0
+      };
+      var count = Number(chapter.question_count) || 0;
+      var subjectiveCount = chapter.subjective_question_count == null
+        ? stat.subjectiveAnswered
+        : Number(chapter.subjective_question_count) || 0;
+      var objectiveCount = chapter.objective_question_count == null
+        ? Math.max(0, count - subjectiveCount)
+        : Number(chapter.objective_question_count) || 0;
+      if (!count) count = objectiveCount + subjectiveCount;
       var latestChapterSession = latestSessionByChapter[chapter.id] || null;
-      var roundAnswered = latestChapterSession
-        ? Math.min(count, Math.max(0, latestChapterSession.answered_count || 0))
-        : stat.answered;
+      var objectiveSession = latestSessionByScope[chapter.id + ':objective'] || null;
+      var subjectiveSession = latestSessionByScope[chapter.id + ':subjective'] || null;
+      var objectiveAnswered = objectiveSession
+        ? Math.min(objectiveCount, Math.max(0, objectiveSession.answered_count || 0))
+        : stat.objectiveAnswered;
+      var subjectiveAnswered = subjectiveSession
+        ? Math.min(subjectiveCount, Math.max(0, subjectiveSession.answered_count || 0))
+        : stat.subjectiveAnswered;
+      var roundAnswered = objectiveAnswered + subjectiveAnswered;
       totalQuestions += count;
       chapterStats.push({
         chapter: chapter,
         answered: roundAnswered,
-        lifetimeAnswered: stat.answered,
+        lifetimeAnswered: stat.objectiveAnswered + stat.subjectiveAnswered,
         latestSession: latestChapterSession,
+        scopes: {
+          objective: {
+            count: objectiveCount,
+            answered: objectiveAnswered,
+            latestSession: objectiveSession
+          },
+          subjective: {
+            count: subjectiveCount,
+            answered: subjectiveAnswered,
+            latestSession: subjectiveSession
+          }
+        },
         correctRate: stat.attempts ? Math.round(stat.correctAttempts * 100 / stat.attempts) : 0,
         progressRate: count ? Math.min(100, Math.round(roundAnswered * 100 / count)) : 0
       });

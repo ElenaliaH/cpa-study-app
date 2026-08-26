@@ -26,7 +26,7 @@ var TaxPracticeData = (function () {
     getUser();
     return supabaseClient
       .from('tax_chapters')
-      .select('id,order_no,title,question_count')
+      .select('id,order_no,title,question_count,objective_question_count,subjective_question_count')
       .eq('is_published', true)
       .order('order_no')
       .then(function (result) {
@@ -70,7 +70,7 @@ var TaxPracticeData = (function () {
     var user = getUser();
     return supabaseClient
       .from('tax_practice_sessions')
-      .select('id,chapter_id,mode,question_ids,current_index,answered_count,correct_count,status,last_active_at')
+      .select('id,chapter_id,mode,question_scope,question_ids,current_index,answered_count,correct_count,status,last_active_at')
       .eq('user_id', user.id)
       .order('last_active_at', { ascending: false })
       .limit(200)
@@ -107,26 +107,31 @@ var TaxPracticeData = (function () {
       });
   }
 
-  function getQuestionIdsForChapter(chapterId) {
+  function getQuestionIdsForChapter(chapterId, scope) {
     getUser();
+    var types = scope === 'subjective'
+      ? ['subjective', 'calculation', 'comprehensive']
+      : ['single_choice', 'multiple_choice', 'single_choice_inferred', 'multiple_choice_inferred'];
     return supabaseClient
       .from('tax_questions')
       .select('id,sequence_no')
       .eq('chapter_id', chapterId)
       .eq('is_published', true)
+      .in('question_type', types)
       .order('sequence_no')
       .then(function (result) {
         return (unwrap(result, '题目列表加载失败') || []).map(function (row) { return row.id; });
       });
   }
 
-  function getLatestChapterSession(chapterId) {
+  function getLatestChapterSession(chapterId, scope) {
     var user = getUser();
     return supabaseClient
       .from('tax_practice_sessions')
       .select('*')
       .eq('user_id', user.id)
       .eq('chapter_id', chapterId)
+      .eq('question_scope', scope)
       .order('last_active_at', { ascending: false })
       .limit(1)
       .maybeSingle()
@@ -135,7 +140,7 @@ var TaxPracticeData = (function () {
       });
   }
 
-  function insertSession(questionIds, chapterId, mode) {
+  function insertSession(questionIds, chapterId, mode, scope) {
     var user = getUser();
     return supabaseClient
       .from('tax_practice_sessions')
@@ -143,6 +148,7 @@ var TaxPracticeData = (function () {
         user_id: user.id,
         chapter_id: chapterId || null,
         mode: mode,
+        question_scope: scope || 'mixed',
         question_ids: questionIds,
         current_index: 0,
         status: 'active'
@@ -154,15 +160,15 @@ var TaxPracticeData = (function () {
       });
   }
 
-  function createChapterSession(chapterId, mode) {
-    return getQuestionIdsForChapter(chapterId).then(function (questionIds) {
+  function createChapterSession(chapterId, mode, scope) {
+    return getQuestionIdsForChapter(chapterId, scope).then(function (questionIds) {
       if (!questionIds.length) throw new Error('这个章节暂时没有可练习题目。');
       if (mode === 'random') questionIds = TaxPracticeLogic.shuffle(questionIds);
-      return insertSession(questionIds, chapterId, mode);
+      return insertSession(questionIds, chapterId, mode, scope);
     });
   }
 
-  function resetChapterSession(chapterId, mode) {
+  function resetChapterSession(chapterId, mode, scope) {
     var user = getUser();
     return supabaseClient
       .from('tax_practice_sessions')
@@ -173,10 +179,11 @@ var TaxPracticeData = (function () {
       })
       .eq('user_id', user.id)
       .eq('chapter_id', chapterId)
+      .eq('question_scope', scope)
       .eq('status', 'active')
       .then(function (result) {
         unwrap(result, '旧专题练习结束失败');
-        return createChapterSession(chapterId, mode);
+        return createChapterSession(chapterId, mode, scope);
       });
   }
 
@@ -184,7 +191,7 @@ var TaxPracticeData = (function () {
     var ids = (questionIds || []).slice(0, 200);
     if (!ids.length) throw new Error('当前列表没有可练习题目。');
     if (mode !== 'note') ids = TaxPracticeLogic.shuffle(ids);
-    return insertSession(ids, null, mode);
+    return insertSession(ids, null, mode, 'mixed');
   }
 
   function getSession(sessionId) {
@@ -237,6 +244,32 @@ var TaxPracticeData = (function () {
       .eq('user_id', user.id)
       .then(function (result) {
         return unwrap(result, '主观题完成记录加载失败') || [];
+      });
+  }
+
+  function getSubjectiveAttempts(sessionId) {
+    var user = getUser();
+    return supabaseClient
+      .from('tax_subjective_attempts')
+      .select('id,question_id,answer_text,status,ai_score,ai_feedback,ai_model,submitted_at,graded_at')
+      .eq('session_id', sessionId)
+      .eq('user_id', user.id)
+      .then(function (result) {
+        return unwrap(result, '主观题作答加载失败') || [];
+      });
+  }
+
+  function saveSubjectiveAnswer(sessionId, questionId, answerText) {
+    getUser();
+    return supabaseClient
+      .rpc('save_tax_subjective_answer', {
+        p_session_id: sessionId,
+        p_question_id: questionId,
+        p_answer_text: String(answerText || '').trim().slice(0, 6000)
+      })
+      .then(function (result) {
+        var rows = unwrap(result, '主观题作答保存失败') || [];
+        return rows[0] || null;
       });
   }
 
@@ -426,6 +459,8 @@ var TaxPracticeData = (function () {
     getQuestions: getQuestions,
     getAttempts: getAttempts,
     getSubjectiveReviews: getSubjectiveReviews,
+    getSubjectiveAttempts: getSubjectiveAttempts,
+    saveSubjectiveAnswer: saveSubjectiveAnswer,
     saveProgress: saveProgress,
     completeSession: completeSession,
     recordAnswer: recordAnswer,

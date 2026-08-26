@@ -52,7 +52,7 @@ test('calculates per-chapter and total progress', function () {
   assert.strictEqual(dashboard.chapters[0].correctRate, 67);
 });
 
-test('uses latest chapter session for resettable round progress', function () {
+test('keeps objective and subjective round progress independent', function () {
   const dashboard = logic.calculateDashboard(
     [{ id: 'one', question_count: 10 }],
     [{ question_id: 'q1', chapter_id: 'one', correct_count: 3, wrong_count: 0 }],
@@ -60,8 +60,10 @@ test('uses latest chapter session for resettable round progress', function () {
     [{ chapter_id: 'one', answered_count: 0, status: 'active' }]
   );
   assert.strictEqual(dashboard.chapters[0].lifetimeAnswered, 2);
-  assert.strictEqual(dashboard.chapters[0].answered, 0);
-  assert.strictEqual(dashboard.chapters[0].progressRate, 0);
+  assert.strictEqual(dashboard.chapters[0].answered, 1);
+  assert.strictEqual(dashboard.chapters[0].progressRate, 10);
+  assert.strictEqual(dashboard.chapters[0].scopes.objective.answered, 0);
+  assert.strictEqual(dashboard.chapters[0].scopes.subjective.answered, 1);
 });
 
 test('formats inferred question types', function () {

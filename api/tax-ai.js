@@ -1,6 +1,7 @@
 const crypto = require('crypto');
 
 const MAX_MESSAGE_LENGTH = 600;
+const MAX_SUBJECTIVE_ANSWER_LENGTH = 6000;
 const MAX_HISTORY_MESSAGES = 12;
 const OPENAI_TIMEOUT_MS = 45000;
 const SUBJECTIVE_TYPES = new Set(['subjective', 'calculation', 'comprehensive']);
@@ -132,6 +133,75 @@ async function getQuestionAndAttempt(config, token, userId, questionId) {
   return { question, attempt: attemptRows[0] };
 }
 
+async function verifySubjectiveSession(config, token, userId, sessionId, questionId) {
+  if (!/^[0-9a-f-]{36}$/i.test(sessionId)) throw new Error('Practice session not found.');
+  const rows = await supabaseRequest(
+    config,
+    '/rest/v1/tax_practice_sessions?id=eq.' + encodeURIComponent(sessionId) +
+      '&user_id=eq.' + encodeURIComponent(userId) +
+      '&question_scope=eq.subjective&select=id,question_ids',
+    token
+  );
+  if (!Array.isArray(rows) || !rows[0] || !Array.isArray(rows[0].question_ids) ||
+      !rows[0].question_ids.includes(questionId)) {
+    throw new Error('Practice session not found.');
+  }
+}
+
+async function savePendingSubjectiveAttempt(config, token, userId, sessionId, questionId, answerText) {
+  const rows = await supabaseRequest(
+    config,
+    '/rest/v1/tax_subjective_attempts?on_conflict=session_id,question_id',
+    token,
+    {
+      method: 'POST',
+      prefer: 'resolution=merge-duplicates,return=representation',
+      body: {
+        user_id: userId,
+        session_id: sessionId,
+        question_id: questionId,
+        answer_text: answerText,
+        status: 'pending',
+        ai_score: null,
+        ai_feedback: null,
+        ai_model: null,
+        submitted_at: new Date().toISOString(),
+        graded_at: null,
+        updated_at: new Date().toISOString()
+      }
+    }
+  );
+  if (!Array.isArray(rows) || !rows[0]) throw new Error('Subjective answer could not be saved.');
+  return rows[0];
+}
+
+async function updateSubjectiveAttempt(config, token, userId, attemptId, values) {
+  const rows = await supabaseRequest(
+    config,
+    '/rest/v1/tax_subjective_attempts?id=eq.' + encodeURIComponent(attemptId) +
+      '&user_id=eq.' + encodeURIComponent(userId),
+    token,
+    { method: 'PATCH', prefer: 'return=representation', body: values }
+  );
+  if (!Array.isArray(rows) || !rows[0]) throw new Error('Subjective grade could not be saved.');
+  return rows[0];
+}
+
+async function markSubjectiveReviewed(config, token, sessionId, questionId) {
+  const rows = await supabaseRequest(
+    config,
+    '/rest/v1/rpc/record_tax_subjective_review',
+    token,
+    { method: 'POST', body: { p_session_id: sessionId, p_question_id: questionId } }
+  );
+  const row = Array.isArray(rows) ? rows[0] : rows;
+  return row ? {
+    id: row.review_id,
+    question_id: questionId,
+    viewed_at: row.viewed_at
+  } : null;
+}
+
 async function getOrCreateThread(config, token, userId, questionId, requestedThreadId) {
   if (requestedThreadId && /^[0-9a-f-]{36}$/i.test(requestedThreadId)) {
     const rows = await supabaseRequest(
@@ -233,7 +303,60 @@ function getInstructions() {
   ].join('\n');
 }
 
-async function callOpenAi(config, prompt, safetyIdentifier) {
+function buildGradingPrompt(question, answerText) {
+  return [
+    '【原题，不可修改】',
+    question.stem,
+    '',
+    '【用户作答】',
+    answerText,
+    '',
+    '【原书答案及解析，不可修改】',
+    question.explanation || '原题未提供答案及解析。',
+    '',
+    '请依据原书答案及解析进行辅助批改。评分为0到100分，重点判断得分点覆盖、计算或判断错误、遗漏内容和表达完整性。'
+  ].join('\n');
+}
+
+function getGradingInstructions() {
+  return [
+    '你是 CPA 税法主观题辅助批改助手。',
+    '只能依据提供的原题、用户作答和原书答案及解析评分。',
+    '不得修改原题、原书答案或原解析，不得把AI意见冒充官方结论。',
+    '分数范围为0到100，反馈必须具体、简洁、可复核。',
+    '如题目信息不足，在summary中明确说明评分局限。'
+  ].join('\n');
+}
+
+function getGradingTextConfig() {
+  return {
+    verbosity: 'low',
+    format: {
+      type: 'json_schema',
+      name: 'subjective_grade',
+      strict: true,
+      schema: {
+        type: 'object',
+        additionalProperties: false,
+        required: [
+          'score', 'summary', 'strengths', 'omissions',
+          'corrections', 'suggestions', 'referenceApproach'
+        ],
+        properties: {
+          score: { type: 'number', minimum: 0, maximum: 100 },
+          summary: { type: 'string' },
+          strengths: { type: 'array', items: { type: 'string' } },
+          omissions: { type: 'array', items: { type: 'string' } },
+          corrections: { type: 'array', items: { type: 'string' } },
+          suggestions: { type: 'array', items: { type: 'string' } },
+          referenceApproach: { type: 'string' }
+        }
+      }
+    }
+  };
+}
+
+async function callOpenAi(config, prompt, safetyIdentifier, options = {}) {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), OPENAI_TIMEOUT_MS);
   let response;
@@ -246,12 +369,12 @@ async function callOpenAi(config, prompt, safetyIdentifier) {
       },
       body: JSON.stringify({
         model: config.model,
-        instructions: getInstructions(),
+        instructions: options.instructions || getInstructions(),
         input: prompt,
         store: false,
-        max_output_tokens: 900,
+        max_output_tokens: options.maxOutputTokens || 900,
         reasoning: { effort: 'low' },
-        text: { verbosity: 'low' },
+        text: options.text || { verbosity: 'low' },
         safety_identifier: safetyIdentifier
       }),
       signal: controller.signal
@@ -284,6 +407,118 @@ async function callOpenAi(config, prompt, safetyIdentifier) {
   };
 }
 
+async function recordAiUsage(config, token, ai) {
+  await supabaseRequest(
+    config,
+    '/rest/v1/rpc/record_tax_ai_usage',
+    token,
+    {
+      method: 'POST',
+      body: {
+        p_input_tokens: ai.inputTokens,
+        p_output_tokens: ai.outputTokens
+      }
+    }
+  ).catch(() => null);
+}
+
+async function handleSubjectiveGrade(req, res, config, token, user, context, body) {
+  const sessionId = String(body.sessionId || '').trim();
+  const answerText = String(body.answerText || '').trim();
+  if (!SUBJECTIVE_TYPES.has(context.question.question_type)) {
+    return sendJson(res, 400, { error: '只有主观题可以使用辅助批改。' });
+  }
+  if (answerText.length < 20 || answerText.length > MAX_SUBJECTIVE_ANSWER_LENGTH) {
+    return sendJson(res, 400, { error: '主观题作答应为20至6000字。' });
+  }
+
+  await verifySubjectiveSession(config, token, user.id, sessionId, context.question.id);
+  const pendingAttempt = await savePendingSubjectiveAttempt(
+    config,
+    token,
+    user.id,
+    sessionId,
+    context.question.id,
+    answerText
+  );
+
+  try {
+    const quota = await consumeQuota(config, token);
+    if (!quota || !quota.allowed) {
+      await updateSubjectiveAttempt(config, token, user.id, pendingAttempt.id, {
+        status: 'submitted',
+        updated_at: new Date().toISOString()
+      }).catch(() => null);
+      if (quota && quota.reason === 'cooldown') {
+        return sendJson(res, 429, {
+          error: '提问太快，请稍后再试。',
+          retryAfter: quota.retry_after_seconds || 5
+        });
+      }
+      return sendJson(res, 429, { error: '今天的 AI 问答次数已用完。', remaining: 0 });
+    }
+
+    const safetyIdentifier = crypto
+      .createHash('sha256')
+      .update('cpa-study:' + user.id)
+      .digest('hex');
+    const ai = await callOpenAi(
+      config,
+      buildGradingPrompt(context.question, answerText),
+      safetyIdentifier,
+      {
+        instructions: getGradingInstructions(),
+        maxOutputTokens: 1400,
+        text: getGradingTextConfig()
+      }
+    );
+    const parsed = JSON.parse(ai.text);
+    const score = Math.max(0, Math.min(100, Number(parsed.score) || 0));
+    const feedback = {
+      summary: String(parsed.summary || ''),
+      strengths: Array.isArray(parsed.strengths) ? parsed.strengths : [],
+      omissions: Array.isArray(parsed.omissions) ? parsed.omissions : [],
+      corrections: Array.isArray(parsed.corrections) ? parsed.corrections : [],
+      suggestions: Array.isArray(parsed.suggestions) ? parsed.suggestions : [],
+      referenceApproach: String(parsed.referenceApproach || '')
+    };
+    const gradedAttempt = await updateSubjectiveAttempt(
+      config,
+      token,
+      user.id,
+      pendingAttempt.id,
+      {
+        status: 'graded',
+        ai_score: score,
+        ai_feedback: feedback,
+        ai_model: config.model,
+        graded_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      }
+    );
+    const review = await markSubjectiveReviewed(
+      config,
+      token,
+      sessionId,
+      context.question.id
+    );
+    await recordAiUsage(config, token, ai);
+    return sendJson(res, 200, {
+      attempt: gradedAttempt,
+      review,
+      remaining: Number(quota.remaining),
+      model: config.model,
+      notice: 'AI辅助批改，请以原书答案和解析为准。'
+    });
+  } catch (error) {
+    await updateSubjectiveAttempt(config, token, user.id, pendingAttempt.id, {
+      status: 'failed',
+      updated_at: new Date().toISOString()
+    }).catch(() => null);
+    throw error;
+  }
+}
+
 module.exports = async function handler(req, res) {
   configureCors(req, res);
   if (req.method === 'OPTIONS') return res.status(204).end();
@@ -295,18 +530,25 @@ module.exports = async function handler(req, res) {
     if (!token) return sendJson(res, 401, { error: '请先登录。' });
 
     const body = typeof req.body === 'string' ? JSON.parse(req.body) : (req.body || {});
+    const action = String(body.action || 'ask').trim();
     const questionId = String(body.questionId || '').trim();
     const message = String(body.message || '').trim();
     const requestedThreadId = String(body.threadId || '').trim();
     if (!/^[a-z0-9-]{6,80}$/i.test(questionId)) {
       return sendJson(res, 400, { error: '题目参数无效。' });
     }
-    if (!message || message.length > MAX_MESSAGE_LENGTH) {
+    if (action !== 'grade' && (!message || message.length > MAX_MESSAGE_LENGTH)) {
       return sendJson(res, 400, { error: '问题不能为空，且最多 600 字。' });
+    }
+    if (action !== 'ask' && action !== 'grade') {
+      return sendJson(res, 400, { error: '不支持的 AI 操作。' });
     }
 
     const user = await verifyUser(config, token);
     const context = await getQuestionAndAttempt(config, token, user.id, questionId);
+    if (action === 'grade') {
+      return await handleSubjectiveGrade(req, res, config, token, user, context, body);
+    }
     const quota = await consumeQuota(config, token);
     if (!quota || !quota.allowed) {
       if (quota && quota.reason === 'cooldown') {
@@ -354,18 +596,7 @@ module.exports = async function handler(req, res) {
       output_tokens: ai.outputTokens
     });
 
-    await supabaseRequest(
-      config,
-      '/rest/v1/rpc/record_tax_ai_usage',
-      token,
-      {
-        method: 'POST',
-        body: {
-          p_input_tokens: ai.inputTokens,
-          p_output_tokens: ai.outputTokens
-        }
-      }
-    ).catch(() => null);
+    await recordAiUsage(config, token, ai);
 
     const messages = history.concat([{
       role: 'assistant',

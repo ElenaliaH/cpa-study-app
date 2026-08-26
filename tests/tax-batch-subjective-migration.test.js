@@ -16,6 +16,7 @@ assert.match(sql, /CREATE POLICY tax_subjective_reviews_select_own/);
 assert.match(sql, /CREATE OR REPLACE FUNCTION public\.record_tax_subjective_review/);
 assert.match(sql, /CREATE OR REPLACE FUNCTION public\.refresh_tax_session_counts/);
 assert.match(sql, /REVOKE ALL ON FUNCTION public\.record_tax_subjective_review\(uuid, text\) FROM PUBLIC/);
+assert.match(sql, /REVOKE ALL ON FUNCTION public\.record_tax_subjective_review\(uuid, text\) FROM anon/);
 assert.match(sql, /GRANT EXECUTE ON FUNCTION public\.record_tax_subjective_review\(uuid, text\) TO authenticated/);
 assert.match(sql, /'subjective'/);
 assert.match(sql, /'calculation'/);

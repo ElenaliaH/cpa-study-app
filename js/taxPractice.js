@@ -13,6 +13,7 @@ var TaxPractice = (function () {
   var questions = [];
   var attemptsByQuestion = {};
   var reviewsByQuestion = {};
+  var subjectiveAttemptsByQuestion = {};
   var currentIndex = 0;
   var selectedAnswer = [];
   var questionOpenedAt = 0;
@@ -20,6 +21,8 @@ var TaxPractice = (function () {
   var aiThreadId = null;
   var collectionKind = null;
   var collectionItems = [];
+  var pendingChapterId = null;
+  var pendingScopeReset = false;
   var toastTimer = null;
 
   function byId(id) {
@@ -60,13 +63,28 @@ var TaxPractice = (function () {
       chapterList.addEventListener('click', function (event) {
         var resetButton = event.target.closest('[data-tax-reset-chapter]');
         if (resetButton) {
-          resetChapter(resetButton.dataset.taxResetChapter);
+          openScopeChooser(resetButton.dataset.taxResetChapter, true);
           return;
         }
         var button = event.target.closest('[data-tax-chapter]');
-        if (button) startChapter(button.dataset.taxChapter);
+        if (button) openScopeChooser(button.dataset.taxChapter, false);
       });
     }
+
+    byId('taxScopeCloseBtn').addEventListener('click', closeScopeChooser);
+    byId('taxScopeOverlay').addEventListener('click', function (event) {
+      if (event.target === this) closeScopeChooser();
+    });
+    byId('taxScopeOverlay').addEventListener('click', function (event) {
+      var button = event.target.closest('[data-tax-scope]');
+      if (!button || button.disabled || !pendingChapterId) return;
+      var chapterId = pendingChapterId;
+      var scope = button.dataset.taxScope;
+      var shouldReset = pendingScopeReset;
+      closeScopeChooser();
+      if (shouldReset) resetChapter(chapterId, scope);
+      else startChapter(chapterId, scope);
+    });
 
     var resume = byId('taxResumeBtn');
     if (resume) {
@@ -97,6 +115,8 @@ var TaxPractice = (function () {
 
     byId('taxOptions').addEventListener('click', handleOptionClick);
     byId('taxRevealSubjectiveBtn').addEventListener('click', revealSubjectiveAnswer);
+    byId('taxGradeSubjectiveBtn').addEventListener('click', gradeSubjectiveAnswer);
+    byId('taxSubjectiveAnswerInput').addEventListener('input', updateSubjectiveGradeButton);
     byId('taxSubmitBtn').addEventListener('click', submitAnswer);
     byId('taxPrevBtn').addEventListener('click', function () {
       moveToQuestion(currentIndex - 1);
@@ -217,7 +237,10 @@ var TaxPractice = (function () {
       var title = latestSession.chapter_id
         ? (chapterTitleById[latestSession.chapter_id] || '章节练习')
         : collectionTitle(latestSession.mode);
-      byId('taxResumeTitle').textContent = title + ' · 第 ' +
+      var resumeScope = latestSession.chapter_id
+        ? (latestSession.question_scope === 'subjective' ? ' · 主观题' : ' · 客观题')
+        : '';
+      byId('taxResumeTitle').textContent = title + resumeScope + ' · 第 ' +
         (Math.min(latestSession.current_index + 1, latestSession.question_ids.length)) + ' 题';
       resumeButton.style.display = 'flex';
     }
@@ -226,12 +249,48 @@ var TaxPractice = (function () {
     }
   }
 
-  function startChapter(chapterId) {
+  function findChapterItem(chapterId) {
+    if (!dashboard) return null;
+    for (var i = 0; i < dashboard.chapters.length; i++) {
+      if (dashboard.chapters[i].chapter.id === chapterId) return dashboard.chapters[i];
+    }
+    return null;
+  }
+
+  function openScopeChooser(chapterId, shouldReset) {
+    var item = findChapterItem(chapterId);
+    if (!item) return;
+    pendingChapterId = chapterId;
+    pendingScopeReset = !!shouldReset;
+    byId('taxScopeTitle').textContent = shouldReset ? '选择重新刷题类型' : '选择题型';
+    byId('taxScopeChapterTitle').textContent = item.chapter.title;
+
+    var objective = item.scopes.objective;
+    var subjective = item.scopes.subjective;
+    byId('taxObjectiveScopeMeta').textContent = objective.count + ' 道 · 已完成 ' + objective.answered;
+    byId('taxSubjectiveScopeMeta').textContent = subjective.count + ' 道 · 已完成 ' + subjective.answered;
+    var scopeButtons = byId('taxScopeOverlay').querySelectorAll('[data-tax-scope]');
+    for (var i = 0; i < scopeButtons.length; i++) {
+      var scope = scopeButtons[i].dataset.taxScope;
+      scopeButtons[i].disabled = item.scopes[scope].count === 0;
+    }
+    byId('taxScopeOverlay').style.display = 'flex';
+    document.body.style.overflow = 'hidden';
+  }
+
+  function closeScopeChooser() {
+    byId('taxScopeOverlay').style.display = 'none';
+    document.body.style.overflow = '';
+    pendingChapterId = null;
+    pendingScopeReset = false;
+  }
+
+  function startChapter(chapterId, scope) {
     setStatus('正在读取专题进度...', 'loading');
-    TaxPracticeData.getLatestChapterSession(chapterId)
+    TaxPracticeData.getLatestChapterSession(chapterId, scope)
       .then(function (existing) {
         if (existing) return existing;
-        return TaxPracticeData.createChapterSession(chapterId, activeMode);
+        return TaxPracticeData.createChapterSession(chapterId, activeMode, scope);
       })
       .then(function (chapterSession) {
         setStatus('', '');
@@ -240,11 +299,11 @@ var TaxPractice = (function () {
       .catch(showError);
   }
 
-  function resetChapter(chapterId) {
+  function resetChapter(chapterId, scope) {
     Modal.confirm('重新刷题会结束当前专题进度并从头开始，但不会删除历史答题、错题、收藏或笔记。确定继续吗？', function (ok) {
       if (!ok) return;
       setStatus('正在创建新一轮专题练习...', 'loading');
-      TaxPracticeData.resetChapterSession(chapterId, activeMode)
+      TaxPracticeData.resetChapterSession(chapterId, activeMode, scope)
         .then(function (created) {
           setStatus('', '');
           return loadSession(created);
@@ -265,7 +324,8 @@ var TaxPractice = (function () {
     return Promise.all([
       TaxPracticeData.getQuestions(session.question_ids || []),
       TaxPracticeData.getAttempts(session.id),
-      TaxPracticeData.getSubjectiveReviews(session.id)
+      TaxPracticeData.getSubjectiveReviews(session.id),
+      TaxPracticeData.getSubjectiveAttempts(session.id)
     ]).then(function (values) {
       questions = values[0];
       attemptsByQuestion = {};
@@ -275,6 +335,10 @@ var TaxPractice = (function () {
       reviewsByQuestion = {};
       for (var reviewIndex = 0; reviewIndex < values[2].length; reviewIndex++) {
         reviewsByQuestion[values[2][reviewIndex].question_id] = values[2][reviewIndex];
+      }
+      subjectiveAttemptsByQuestion = {};
+      for (var attemptIndex = 0; attemptIndex < values[3].length; attemptIndex++) {
+        subjectiveAttemptsByQuestion[values[3][attemptIndex].question_id] = values[3][attemptIndex];
       }
       if (!questions.length) throw new Error('当前练习没有可显示的题目。');
       currentIndex = TaxPracticeLogic.clamp(session.current_index || 0, 0, questions.length - 1);
@@ -291,6 +355,7 @@ var TaxPractice = (function () {
     var isSubjective = TaxPracticeLogic.isSubjectiveType(question.question_type);
     var attempt = attemptsByQuestion[question.id] || null;
     var review = reviewsByQuestion[question.id] || null;
+    var subjectiveAttempt = subjectiveAttemptsByQuestion[question.id] || null;
     selectedAnswer = attempt ? TaxPracticeLogic.normalizeAnswer(attempt.selected_answer) : [];
     currentQuestionState = null;
     aiThreadId = null;
@@ -307,7 +372,10 @@ var TaxPractice = (function () {
     }
     if (!session.chapter_id) title = collectionTitle(session.mode);
 
-    byId('taxPracticeTitle').textContent = title;
+    var scopeLabel = session.chapter_id
+      ? (session.question_scope === 'subjective' ? ' · 主观题' : ' · 客观题')
+      : '';
+    byId('taxPracticeTitle').textContent = title + scopeLabel;
     byId('taxPracticeProgressText').textContent = (currentIndex + 1) + ' / ' + questions.length;
     byId('taxPracticeProgressFill').style.width = Math.round((currentIndex + 1) * 100 / questions.length) + '%';
     byId('taxQuestionType').textContent =
@@ -318,7 +386,12 @@ var TaxPractice = (function () {
     byId('taxOptions').style.display = isSubjective ? 'none' : 'grid';
     byId('taxSubjectiveAction').style.display = isSubjective ? 'block' : 'none';
     byId('taxRevealSubjectiveBtn').disabled = !!review;
-    byId('taxRevealSubjectiveBtn').textContent = review ? '已显示答案及解析' : '显示答案及解析';
+    byId('taxRevealSubjectiveBtn').textContent = review ? '已显示原书答案' : '直接查看原书答案';
+    byId('taxSubjectiveAnswerInput').value = subjectiveAttempt ? (subjectiveAttempt.answer_text || '') : '';
+    byId('taxGradeSubjectiveBtn').textContent = subjectiveAttempt && subjectiveAttempt.status === 'graded'
+      ? '重新辅助批改'
+      : 'GPT辅助批改';
+    updateSubjectiveGradeButton();
     renderOptions(question, attempt);
     byId('taxPrevBtn').disabled = currentIndex === 0;
     byId('taxNextBtn').textContent = currentIndex === questions.length - 1 ? '完成专题' : '下一题';
@@ -326,6 +399,9 @@ var TaxPractice = (function () {
     var showResult = isSubjective ? !!review : !!attempt;
     var canUseAi = showResult;
     byId('taxResultCard').style.display = showResult ? 'block' : 'none';
+    byId('taxGradeCard').style.display = isSubjective && subjectiveAttempt && subjectiveAttempt.status === 'graded'
+      ? 'block'
+      : 'none';
     byId('taxAiCard').style.display = canUseAi ? 'block' : 'none';
     byId('taxAiMessages').innerHTML = '';
     byId('taxAiInput').value = '';
@@ -336,6 +412,9 @@ var TaxPractice = (function () {
     submit.textContent = attempt ? '已提交' : '提交答案';
 
     if (showResult) renderResult(question, attempt);
+    if (isSubjective && subjectiveAttempt && subjectiveAttempt.status === 'graded') {
+      renderSubjectiveGrade(subjectiveAttempt);
+    }
     loadQuestionState(question.id);
     if (canUseAi) loadAiHistory(question.id);
     renderAnswerCard();
@@ -387,14 +466,138 @@ var TaxPractice = (function () {
     byId('taxSubmitBtn').disabled = !selectedAnswer.length;
   }
 
+  function updateSubjectiveGradeButton() {
+    var question = questions[currentIndex];
+    var button = byId('taxGradeSubjectiveBtn');
+    if (!question || !TaxPracticeLogic.isSubjectiveType(question.question_type)) {
+      button.disabled = true;
+      return;
+    }
+    button.disabled = button.dataset.busy === 'true' ||
+      byId('taxSubjectiveAnswerInput').value.trim().length < 20;
+  }
+
+  function gradeSubjectiveAnswer() {
+    var question = questions[currentIndex];
+    var answerText = byId('taxSubjectiveAnswerInput').value.trim();
+    if (!question || !TaxPracticeLogic.isSubjectiveType(question.question_type)) return;
+    if (answerText.length < 20) {
+      showToast('请先写下至少20字的作答内容。', 'error');
+      return;
+    }
+
+    var button = byId('taxGradeSubjectiveBtn');
+    button.dataset.busy = 'true';
+    button.disabled = true;
+    button.textContent = '批改中...';
+    byId('taxPrevBtn').disabled = true;
+    byId('taxNextBtn').disabled = true;
+
+    TaxPracticeData.getAccessToken()
+      .then(function (token) {
+        return fetch('/api/tax-ai', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer ' + token
+          },
+          body: JSON.stringify({
+            action: 'grade',
+            sessionId: session.id,
+            questionId: question.id,
+            answerText: answerText
+          })
+        });
+      })
+      .then(function (response) {
+        return response.json().catch(function () { return {}; }).then(function (body) {
+          if (!response.ok) throw new Error(body.error || '辅助批改失败');
+          return body;
+        });
+      })
+      .then(function (body) {
+        subjectiveAttemptsByQuestion[question.id] = body.attempt;
+        if (body.review) reviewsByQuestion[question.id] = body.review;
+        if (questions[currentIndex] && questions[currentIndex].id === question.id) renderQuestion();
+        renderAnswerCard();
+        var suffix = typeof body.remaining === 'number' ? '，今日剩余 ' + body.remaining + ' 次' : '';
+        showToast('GPT辅助批改已完成' + suffix, 'success');
+      })
+      .catch(function (error) {
+        button.textContent = '重试辅助批改';
+        showToast(error.message || '辅助批改失败', 'error');
+      })
+      .finally(function () {
+        button.dataset.busy = 'false';
+        byId('taxPrevBtn').disabled = currentIndex === 0;
+        byId('taxNextBtn').disabled = false;
+        updateSubjectiveGradeButton();
+      });
+  }
+
+  function renderSubjectiveGrade(attempt) {
+    var feedback = attempt.ai_feedback || {};
+    if (typeof feedback === 'string') feedback = { summary: feedback };
+    byId('taxGradeScore').textContent = typeof attempt.ai_score === 'number'
+      ? Math.round(attempt.ai_score) + ' / 100'
+      : '已批改';
+    var container = byId('taxGradeContent');
+    container.innerHTML = '';
+
+    appendGradeSection(container, '评分概览', feedback.summary || '已完成辅助批改。');
+    appendGradeList(container, '答对的得分点', feedback.strengths);
+    appendGradeList(container, '遗漏的得分点', feedback.omissions);
+    appendGradeList(container, '需要修正', feedback.corrections);
+    appendGradeList(container, '改进建议', feedback.suggestions);
+    appendGradeSection(container, '参考答题思路', feedback.referenceApproach || '请结合下方原书答案及解析复核。');
+  }
+
+  function appendGradeSection(container, title, content) {
+    if (!content) return;
+    var section = document.createElement('section');
+    section.className = 'tax-grade-section';
+    var heading = document.createElement('h3');
+    heading.textContent = title;
+    var paragraph = document.createElement('p');
+    paragraph.textContent = content;
+    section.appendChild(heading);
+    section.appendChild(paragraph);
+    container.appendChild(section);
+  }
+
+  function appendGradeList(container, title, values) {
+    if (!Array.isArray(values) || !values.length) return;
+    var section = document.createElement('section');
+    section.className = 'tax-grade-section';
+    var heading = document.createElement('h3');
+    heading.textContent = title;
+    var list = document.createElement('ul');
+    for (var i = 0; i < values.length; i++) {
+      var item = document.createElement('li');
+      item.textContent = values[i];
+      list.appendChild(item);
+    }
+    section.appendChild(heading);
+    section.appendChild(list);
+    container.appendChild(section);
+  }
+
   function revealSubjectiveAnswer() {
     var question = questions[currentIndex];
     if (!question || !TaxPracticeLogic.isSubjectiveType(question.question_type) || reviewsByQuestion[question.id]) return;
     var button = byId('taxRevealSubjectiveBtn');
     button.disabled = true;
     button.textContent = '保存中...';
+    var answerText = byId('taxSubjectiveAnswerInput').value.trim();
+    var saveAnswer = answerText
+      ? TaxPracticeData.saveSubjectiveAnswer(session.id, question.id, answerText)
+      : Promise.resolve(null);
 
-    TaxPracticeData.recordSubjectiveReview(session.id, question.id)
+    saveAnswer
+      .then(function (savedAttempt) {
+        if (savedAttempt) subjectiveAttemptsByQuestion[question.id] = savedAttempt;
+        return TaxPracticeData.recordSubjectiveReview(session.id, question.id);
+      })
       .then(function (result) {
         if (!result) throw new Error('主观题完成记录保存后没有返回结果。');
         reviewsByQuestion[question.id] = {
@@ -557,6 +760,7 @@ var TaxPractice = (function () {
         questions = [];
         attemptsByQuestion = {};
         reviewsByQuestion = {};
+        subjectiveAttemptsByQuestion = {};
         showHome();
         loadHome();
       })

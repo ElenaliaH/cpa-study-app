@@ -56,6 +56,34 @@ global.fetch = async function (url, options) {
     if (questionMode === 'subjective') throw new Error('Subjective AI must not require an objective attempt.');
     return new MockResponse(200, [{ selected_answer: ['A'] }]);
   }
+  if (url.includes('/tax_practice_sessions?')) {
+    return new MockResponse(200, [{
+      id: '22222222-2222-2222-2222-222222222222',
+      question_ids: ['tax-topic-01-subjective-p00027']
+    }]);
+  }
+  if (url.includes('/tax_subjective_attempts?on_conflict=')) {
+    const payload = JSON.parse(options.body);
+    return new MockResponse(201, [{
+      id: '33333333-3333-3333-3333-333333333333',
+      ...payload
+    }]);
+  }
+  if (url.includes('/tax_subjective_attempts?id=eq.')) {
+    const payload = JSON.parse(options.body);
+    return new MockResponse(200, [{
+      id: '33333333-3333-3333-3333-333333333333',
+      question_id: 'tax-topic-01-subjective-p00027',
+      answer_text: '测试主观题作答内容，包含判断依据、计算过程和最终结论。',
+      ...payload
+    }]);
+  }
+  if (url.includes('/rpc/record_tax_subjective_review')) {
+    return new MockResponse(200, [{
+      review_id: '44444444-4444-4444-4444-444444444444',
+      viewed_at: '2026-08-26T00:00:00Z'
+    }]);
+  }
   if (url.endsWith('/rest/v1/tax_ai_threads')) {
     return new MockResponse(201, [{ id: '11111111-1111-1111-1111-111111111111' }]);
   }
@@ -73,6 +101,21 @@ global.fetch = async function (url, options) {
     return new MockResponse(200, null);
   }
   if (url === 'https://api.openai.com/v1/responses') {
+    const payload = JSON.parse(options.body);
+    if (payload.text && payload.text.format) {
+      return new MockResponse(200, {
+        output_text: JSON.stringify({
+          score: 82,
+          summary: '核心得分点基本完整。',
+          strengths: ['判断主体正确'],
+          omissions: ['遗漏纳税义务发生时间'],
+          corrections: ['补充抵扣条件'],
+          suggestions: ['按步骤展开'],
+          referenceApproach: '先定主体，再定时间和税基。'
+        }),
+        usage: { input_tokens: 200, output_tokens: 100 }
+      });
+    }
     return new MockResponse(200, {
       output_text: 'AI辅助解释\n知识点讲解\n测试\n具体例子\n测试\n一眼看懂批注\n测试',
       usage: { input_tokens: 120, output_tokens: 60 }
@@ -149,7 +192,33 @@ function createResponse() {
   assert.ok(subjectiveOpenAiBody.input.includes('【原书答案及解析，不可修改】'));
   assert.ok(subjectiveOpenAiBody.input.includes('主观题自测，用户未提交文字答案。'));
 
-  process.stdout.write('PASS AI endpoint verifies context, keeps secrets server-side, and records usage\n');
+  calls.length = 0;
+  const gradeReq = {
+    method: 'POST',
+    headers: req.headers,
+    body: {
+      action: 'grade',
+      sessionId: '22222222-2222-2222-2222-222222222222',
+      questionId: 'tax-topic-01-subjective-p00027',
+      answerText: '测试主观题作答内容，包含判断依据、计算过程和最终结论。'
+    }
+  };
+  const gradeRes = createResponse();
+  await handler(gradeReq, gradeRes);
+
+  assert.strictEqual(gradeRes.statusCode, 200);
+  assert.strictEqual(gradeRes.body.attempt.status, 'graded');
+  assert.strictEqual(gradeRes.body.attempt.ai_score, 82);
+  assert.strictEqual(gradeRes.body.review.question_id, 'tax-topic-01-subjective-p00027');
+  const gradeOpenAiCall = calls.find((call) => call.url === 'https://api.openai.com/v1/responses');
+  const gradeOpenAiBody = JSON.parse(gradeOpenAiCall.options.body);
+  assert.strictEqual(gradeOpenAiBody.text.format.type, 'json_schema');
+  assert.ok(gradeOpenAiBody.input.includes('【用户作答】'));
+  assert.ok(gradeOpenAiBody.input.includes('【原书答案及解析，不可修改】'));
+  assert.ok(calls.some((call) => call.url.includes('/tax_subjective_attempts?on_conflict=')));
+  assert.ok(calls.some((call) => call.url.includes('/rpc/record_tax_subjective_review')));
+
+  process.stdout.write('PASS AI endpoint verifies context, grades subjective answers, and keeps secrets server-side\n');
 })().catch(function (error) {
   process.stderr.write(error.stack + '\n');
   process.exit(1);

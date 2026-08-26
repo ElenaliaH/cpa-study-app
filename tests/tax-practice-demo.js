@@ -6,10 +6,11 @@
   var latestSession = null;
   var attempts = {};
   var reviews = {};
+  var subjectiveAttempts = {};
   var states = {};
   var aiMessages = {};
   var nativeFetch = window.fetch.bind(window);
-  var demoStateKey = 'cpa-tax-demo-state-v3';
+  var demoStateKey = 'cpa-tax-demo-state-v4';
 
   function clearDemoState() {
     localStorage.removeItem(demoStateKey);
@@ -22,6 +23,7 @@
       sessions = saved.sessions || {};
       attempts = saved.attempts || {};
       reviews = saved.reviews || {};
+      subjectiveAttempts = saved.subjectiveAttempts || {};
       states = saved.states || {};
       aiMessages = saved.aiMessages || {};
       latestSession = saved.latestSessionId ? sessions[saved.latestSessionId] || null : null;
@@ -35,6 +37,7 @@
       sessions: sessions,
       attempts: attempts,
       reviews: reviews,
+      subjectiveAttempts: subjectiveAttempts,
       states: states,
       aiMessages: aiMessages,
       latestSessionId: latestSession ? latestSession.id : null
@@ -123,11 +126,19 @@
     loadDashboard: function () {
       return loadBank().then(function (bank) {
         var chapters = bank.chapters.map(function (chapter) {
+          var chapterQuestions = bank.questions.filter(function (question) {
+            return question.chapterId === chapter.id;
+          });
+          var subjectiveCount = chapterQuestions.filter(function (question) {
+            return ['subjective', 'calculation', 'comprehensive'].indexOf(question.questionType) >= 0;
+          }).length;
           return {
             id: chapter.id,
             order_no: chapter.order,
             title: chapter.title,
-            question_count: chapter.questionCount
+            question_count: chapterQuestions.length,
+            objective_question_count: chapterQuestions.length - subjectiveCount,
+            subjective_question_count: subjectiveCount
           };
         });
         var byId = questionMap(bank);
@@ -156,32 +167,41 @@
     getLatestSession: function () {
       return Promise.resolve(latestSession);
     },
-    getLatestChapterSession: function (chapterId) {
+    getLatestChapterSession: function (chapterId, scope) {
       var matches = Object.keys(sessions)
         .map(function (id) { return sessions[id]; })
-        .filter(function (item) { return item.chapter_id === chapterId; })
+        .filter(function (item) {
+          return item.chapter_id === chapterId && (item.question_scope || 'objective') === scope;
+        })
         .sort(function (a, b) { return String(b.last_active_at).localeCompare(String(a.last_active_at)); });
       return Promise.resolve(matches[0] || null);
     },
-    createChapterSession: function (chapterId, mode) {
+    createChapterSession: function (chapterId, mode, scope) {
       return loadBank().then(function (bank) {
         var ids = bank.questions
-          .filter(function (question) { return question.chapterId === chapterId; })
+          .filter(function (question) {
+            var subjective = ['subjective', 'calculation', 'comprehensive']
+              .indexOf(question.questionType) >= 0;
+            return question.chapterId === chapterId &&
+              (scope === 'subjective' ? subjective : !subjective);
+          })
           .map(function (question) { return question.id; });
         if (mode === 'random') ids = TaxPracticeLogic.shuffle(ids);
-        return createSession(ids, chapterId, mode);
+        return createSession(ids, chapterId, mode, scope);
       });
     },
-    resetChapterSession: function (chapterId, mode) {
+    resetChapterSession: function (chapterId, mode, scope) {
       Object.keys(sessions).forEach(function (id) {
-        if (sessions[id].chapter_id === chapterId && sessions[id].status === 'active') {
+        if (sessions[id].chapter_id === chapterId &&
+            (sessions[id].question_scope || 'objective') === scope &&
+            sessions[id].status === 'active') {
           sessions[id].status = 'completed';
         }
       });
-      return this.createChapterSession(chapterId, mode);
+      return this.createChapterSession(chapterId, mode, scope);
     },
     createCollectionSession: function (ids, mode) {
-      return Promise.resolve(createSession(ids, null, mode));
+      return Promise.resolve(createSession(ids, null, mode, 'mixed'));
     },
     getSession: function (sessionId) {
       return Promise.resolve(sessions[sessionId]);
@@ -203,6 +223,28 @@
       return Promise.resolve(Object.keys(reviews)
         .map(function (key) { return reviews[key]; })
         .filter(function (review) { return review.session_id === sessionId; }));
+    },
+    getSubjectiveAttempts: function (sessionId) {
+      return Promise.resolve(Object.keys(subjectiveAttempts)
+        .map(function (key) { return subjectiveAttempts[key]; })
+        .filter(function (attempt) { return attempt.session_id === sessionId; }));
+    },
+    saveSubjectiveAnswer: function (sessionId, questionId, answerText) {
+      var key = sessionId + ':' + questionId;
+      subjectiveAttempts[key] = {
+        id: subjectiveAttempts[key] ? subjectiveAttempts[key].id : makeId('subjective-attempt'),
+        session_id: sessionId,
+        question_id: questionId,
+        answer_text: answerText,
+        status: 'submitted',
+        ai_score: null,
+        ai_feedback: null,
+        ai_model: null,
+        submitted_at: new Date().toISOString(),
+        graded_at: null
+      };
+      saveDemoState();
+      return Promise.resolve(subjectiveAttempts[key]);
     },
     saveProgress: function (sessionId, index) {
       sessions[sessionId].current_index = index;
@@ -310,12 +352,13 @@
     }
   };
 
-  function createSession(ids, chapterId, mode) {
+  function createSession(ids, chapterId, mode, scope) {
     var id = makeId('session');
     var session = {
       id: id,
       chapter_id: chapterId,
       mode: mode,
+      question_scope: scope,
       question_ids: ids,
       current_index: 0,
       answered_count: 0,
@@ -347,6 +390,51 @@
   window.fetch = function (url, options) {
     if (url !== '/api/tax-ai') return nativeFetch(url, options);
     var body = JSON.parse(options.body);
+    if (body.action === 'grade') {
+      var attemptKey = body.sessionId + ':' + body.questionId;
+      var gradedAttempt = {
+        id: subjectiveAttempts[attemptKey]
+          ? subjectiveAttempts[attemptKey].id
+          : makeId('subjective-attempt'),
+        session_id: body.sessionId,
+        question_id: body.questionId,
+        answer_text: body.answerText,
+        status: 'graded',
+        ai_score: 82,
+        ai_feedback: {
+          summary: '核心判断顺序基本完整，计税依据和时间点还可以写得更明确。',
+          strengths: ['先判断纳税主体和交易性质', '提到了计税依据和适用税率'],
+          omissions: ['未单独说明纳税义务发生时间'],
+          corrections: ['可抵扣项目应结合合法凭证和用途判断'],
+          suggestions: ['按主体、行为、时间、税基、税率、抵扣、税额的顺序作答'],
+          referenceApproach: '先定主体和应税行为，再定时间与税基，最后计算税额并复核抵扣条件。'
+        },
+        ai_model: 'demo-gpt',
+        submitted_at: new Date().toISOString(),
+        graded_at: new Date().toISOString()
+      };
+      subjectiveAttempts[attemptKey] = gradedAttempt;
+      var reviewKey = body.sessionId + ':' + body.questionId;
+      if (!reviews[reviewKey]) {
+        reviews[reviewKey] = {
+          id: makeId('review'),
+          session_id: body.sessionId,
+          question_id: body.questionId,
+          viewed_at: new Date().toISOString()
+        };
+      }
+      refreshDemoSessionCounts(body.sessionId);
+      saveDemoState();
+      return Promise.resolve(new Response(JSON.stringify({
+        attempt: gradedAttempt,
+        review: reviews[reviewKey],
+        remaining: 19,
+        model: 'demo-gpt'
+      }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' }
+      }));
+    }
     var messages = aiMessages[body.questionId] || [];
     messages.push({ role: 'user', content: body.message, created_at: new Date().toISOString() });
     messages.push({
@@ -409,15 +497,24 @@
           if (reset) reset.click();
         }, 700);
         setTimeout(function () {
+          var objective = document.querySelector('[data-tax-scope="objective"]');
+          if (objective) objective.click();
+        }, 850);
+        setTimeout(function () {
           var confirm = document.getElementById('modalConfirm');
           if (confirm) confirm.click();
-        }, 950);
+        }, 1050);
         return;
       }
       setTimeout(function () {
         var chapter = document.querySelector('[data-tax-chapter]');
         if (chapter) chapter.click();
       }, 700);
+      setTimeout(function () {
+        var scope = scenario === 'subjective' ? 'subjective' : 'objective';
+        var scopeButton = document.querySelector('[data-tax-scope="' + scope + '"]');
+        if (scopeButton) scopeButton.click();
+      }, 900);
       if (scenario === 'progress') {
         setTimeout(function () {
           var firstOption = document.querySelector('[data-tax-option]');
@@ -465,9 +562,13 @@
       }
       if (scenario === 'subjective') {
         setTimeout(function () {
-          for (var i = 0; i < 4; i++) document.getElementById('taxNextBtn').click();
-          var reveal = document.getElementById('taxRevealSubjectiveBtn');
-          if (reveal) reveal.click();
+          var answer = document.getElementById('taxSubjectiveAnswerInput');
+          if (answer) {
+            answer.value = '应先判断纳税主体和交易性质，再确认纳税义务发生时间、计税依据、适用税率、抵扣条件并计算应纳税额。';
+            answer.dispatchEvent(new Event('input', { bubbles: true }));
+          }
+          var grade = document.getElementById('taxGradeSubjectiveBtn');
+          if (grade) grade.click();
         }, 1500);
       }
     }, 20);
