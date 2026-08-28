@@ -1,9 +1,9 @@
 // Service Worker — 离线缓存
-var CACHE_NAME = 'cpa-study-v13';
+var CACHE_NAME = 'cpa-study-v14';
 var FILES_TO_CACHE = [
   './',
   './index.html',
-  './css/style.css?v=20260827a',
+  './css/style.css?v=20260829a',
   './js/vendor/supabase.js',
   './js/store.js',
   './js/modal.js',
@@ -17,7 +17,7 @@ var FILES_TO_CACHE = [
   './js/focus.js',
   './js/taxPracticeLogic.js?v=20260827a',
   './js/taxPracticeData.js?v=20260827c',
-  './js/taxPractice.js?v=20260827c',
+  './js/taxPractice.js?v=20260829a',
   './js/backup.js',
   './js/restday.js',
   './js/app.js',

@@ -30,13 +30,18 @@ test('places question navigation before grading and answer analysis', function (
   assert(navigationIndex < resultIndex);
 });
 
-test('shows remove action before favorite action in question header', function () {
+test('shows remove and copy actions before favorite action in question header', function () {
   const removeIndex = html.indexOf('id="taxRemoveWrongBtn"');
+  const copyIndex = html.indexOf('id="taxCopyBtn"');
   const favoriteIndex = html.indexOf('id="taxFavoriteBtn"');
   assert(removeIndex >= 0);
-  assert(removeIndex < favoriteIndex);
+  assert(removeIndex < copyIndex);
+  assert(copyIndex < favoriteIndex);
   assert(ui.includes("session.mode === 'wrong'"));
   assert(ui.includes('removeCurrentWrongQuestion'));
+  assert(ui.includes("byId('taxCopyBtn').addEventListener('click', copyCurrentQuestion)"));
+  assert(ui.includes("lines.push(label + '. ' + text)"));
+  assert(ui.includes('navigator.clipboard.writeText(text)'));
 });
 
 test('supports deliberate horizontal swipe without blocking vertical scroll', function () {

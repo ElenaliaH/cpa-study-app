@@ -1417,6 +1417,26 @@ body {
 }
 .tax-remove-wrong-button:hover:not(:disabled) { border-color: #b42318; background: var(--red-soft); }
 .tax-remove-wrong-button:disabled { cursor: not-allowed; opacity: .45; }
+.tax-copy-button {
+  width: 34px; height: 34px; display: inline-flex; align-items: center; justify-content: center;
+  border: none; border-radius: 50%; background: transparent; color: var(--text-tertiary);
+  cursor: pointer;
+}
+.tax-copy-button:hover { color: var(--accent); background: var(--accent-soft); }
+.tax-copy-button:active { transform: scale(.94); }
+.tax-copy-icon {
+  position: relative; width: 16px; height: 16px; display: block;
+}
+.tax-copy-icon::before,
+.tax-copy-icon::after {
+  content: ''; position: absolute; width: 10px; height: 10px;
+  border: 1.5px solid currentColor; border-radius: 2px;
+}
+.tax-copy-icon::before { left: 1px; top: 1px; }
+.tax-copy-icon::after {
+  right: 1px; bottom: 1px;
+  background: var(--surface-solid);
+}
 .tax-favorite-button {
   width: 34px; height: 34px; border: none; border-radius: 50%;
   background: transparent; color: var(--text-tertiary);
@@ -1661,6 +1681,7 @@ body {
   .nav-top { gap: 8px; }
   .nav-top .btn { margin-left: auto; }
   .tax-page-title { font-size: 24px; }
+  .tax-copy-button, .tax-favorite-button { width: 40px; height: 40px; }
   .tax-page-header { min-width: 0; }
   .tax-overview {
     grid-template-columns: repeat(3, calc((100% - 14px) / 3));
