@@ -14,7 +14,7 @@
   <link rel="apple-touch-icon" href="icon.svg">
   <link rel="icon" href="icon.svg">
 
-  <link rel="stylesheet" href="css/style.css?v=20260827a">
+  <link rel="stylesheet" href="css/style.css?v=20260829a">
 
   <!-- Supabase SDK（本地构建） -->
   <script src="js/vendor/supabase.js"></script>
@@ -316,6 +316,7 @@
             <span id="taxQuestionType">单选题</span>
             <div class="tax-question-actions">
               <button class="tax-remove-wrong-button" id="taxRemoveWrongBtn" type="button" style="display:none;">移除题目</button>
+              <button class="tax-copy-button" id="taxCopyBtn" type="button" aria-label="复制题目和选项" title="复制题目和选项"><span class="tax-copy-icon" aria-hidden="true"></span></button>
               <button class="tax-favorite-button" id="taxFavoriteBtn" type="button" aria-label="收藏本题" title="收藏本题">☆</button>
             </div>
           </div>
@@ -478,7 +479,7 @@
   <script src="js/focus.js"></script>
   <script src="js/taxPracticeLogic.js?v=20260827a"></script>
   <script src="js/taxPracticeData.js?v=20260827c"></script>
-  <script src="js/taxPractice.js?v=20260827c"></script>
+  <script src="js/taxPractice.js?v=20260829a"></script>
   <script>
     if (
       (location.hostname === 'localhost' || location.hostname === '127.0.0.1') &&

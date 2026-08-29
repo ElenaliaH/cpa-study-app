@@ -127,6 +127,7 @@ var TaxPractice = (function () {
     });
     byId('taxNextBtn').addEventListener('click', handleNext);
     byId('taxRemoveWrongBtn').addEventListener('click', removeCurrentWrongQuestion);
+    byId('taxCopyBtn').addEventListener('click', copyCurrentQuestion);
     byId('taxFavoriteBtn').addEventListener('click', toggleFavorite);
     byId('taxSaveNoteBtn').addEventListener('click', saveNote);
 
@@ -842,6 +843,54 @@ var TaxPractice = (function () {
       renderQuestionState();
       showToast(nextValue ? '已收藏本题' : '已取消收藏', 'success');
     }).catch(showToastError);
+  }
+
+  function buildQuestionCopyText(question) {
+    if (!question) return '';
+    var lines = [];
+    var questionType = TaxPracticeLogic.formatQuestionType(question.question_type);
+    if (questionType) lines.push('【' + questionType + '】');
+    if (question.stem) lines.push(String(question.stem).trim());
+
+    var options = Array.isArray(question.options) ? question.options : [];
+    for (var i = 0; i < options.length; i++) {
+      var option = options[i] || {};
+      var label = option.label ? String(option.label).trim() : '';
+      var text = option.text ? String(option.text).trim() : '';
+      if (label && text) lines.push(label + '. ' + text);
+      else if (text) lines.push(text);
+    }
+    return lines.join('\n');
+  }
+
+  function fallbackCopyText(text) {
+    var textarea = document.createElement('textarea');
+    textarea.value = text;
+    textarea.setAttribute('readonly', '');
+    textarea.style.position = 'fixed';
+    textarea.style.left = '-9999px';
+    textarea.style.top = '0';
+    document.body.appendChild(textarea);
+    textarea.select();
+    try {
+      return document.execCommand('copy');
+    } catch (error) {
+      return false;
+    } finally {
+      document.body.removeChild(textarea);
+    }
+  }
+
+  function copyCurrentQuestion() {
+    var text = buildQuestionCopyText(questions[currentIndex]);
+    if (!text) return;
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).catch(function () {
+        fallbackCopyText(text);
+      });
+      return;
+    }
+    fallbackCopyText(text);
   }
 
   function saveNote() {
