@@ -1,9 +1,12 @@
 // Service Worker — 离线缓存
-var CACHE_NAME = 'cpa-study-v14';
+var CACHE_NAME = 'cpa-study-v15-workspaces';
 var FILES_TO_CACHE = [
   './',
   './index.html',
-  './css/style.css?v=20260829a',
+  './css/style.css?v=20260912w',
+  './js/workspaceLogic.js',
+  './js/workspaceSync.js',
+  './js/workspaces.js',
   './js/vendor/supabase.js',
   './js/store.js',
   './js/modal.js',

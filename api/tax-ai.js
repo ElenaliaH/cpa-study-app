@@ -143,12 +143,24 @@ async function consumeQuota(config, token) {
   return Array.isArray(rows) ? rows[0] : rows;
 }
 
+async function verifyWorkspace(config, token, userId, workspaceId) {
+  if (!/^[0-9a-f-]{36}$/i.test(workspaceId)) {
+    const error = new Error('Invalid workspace.'); error.status = 400; error.code = 'workspace_invalid'; throw error;
+  }
+  const rows = await supabaseRequest(config, '/rest/v1/study_workspaces?id=eq.' + encodeURIComponent(workspaceId) +
+    '&user_id=eq.' + encodeURIComponent(userId) + '&status=eq.active&select=id,exam_type,year', token);
+  if (!Array.isArray(rows) || !rows[0]) {
+    const error = new Error('Workspace not found.'); error.status = 403; error.code = 'workspace_invalid'; throw error;
+  }
+  config.workspace = rows[0];
+}
+
 async function getQuestionAndAttempt(config, token, userId, questionId) {
   const encodedId = encodeURIComponent(questionId);
   const questionRows = await supabaseRequest(
     config,
     '/rest/v1/tax_questions?id=eq.' + encodedId +
-      '&is_published=eq.true&select=id,question_type,stem,options,correct_answer,answer_raw,explanation',
+      '&is_published=eq.true&select=id,bank_id,question_type,stem,options,correct_answer,answer_raw,explanation',
     token
   );
   if (!Array.isArray(questionRows) || !questionRows[0]) {
@@ -156,6 +168,13 @@ async function getQuestionAndAttempt(config, token, userId, questionId) {
   }
 
   const question = questionRows[0];
+  const banks = await supabaseRequest(config, '/rest/v1/practice_banks?id=eq.' + encodeURIComponent(question.bank_id) +
+    '&exam_type=eq.' + encodeURIComponent(config.workspace.exam_type) + '&status=eq.published&select=id,subject,edition_year', token);
+  if (!Array.isArray(banks) || !banks[0]) {
+    const error = new Error('Question does not belong to this workspace.'); error.status = 403; error.code = 'workspace_invalid'; throw error;
+  }
+  question.studyContext = (config.workspace.exam_type === 'cpa' ? 'CPA' : '税务师') + ' ' + config.workspace.year +
+    ' / ' + banks[0].subject + ' / 题库版本年度 ' + banks[0].edition_year;
   if (SUBJECTIVE_TYPES.has(question.question_type)) {
     return { question, attempt: null };
   }
@@ -164,6 +183,7 @@ async function getQuestionAndAttempt(config, token, userId, questionId) {
     config,
     '/rest/v1/tax_question_attempts?user_id=eq.' + encodeURIComponent(userId) +
       '&question_id=eq.' + encodedId +
+      '&workspace_id=eq.' + encodeURIComponent(config.workspace.id) +
       '&select=selected_answer&order=answered_at.desc&limit=1',
     token
   );
@@ -180,7 +200,7 @@ async function verifySubjectiveSession(config, token, userId, sessionId, questio
     config,
     '/rest/v1/tax_practice_sessions?id=eq.' + encodeURIComponent(sessionId) +
       '&user_id=eq.' + encodeURIComponent(userId) +
-      '&question_scope=eq.subjective&select=id,question_ids',
+      '&workspace_id=eq.' + encodeURIComponent(config.workspace.id) + '&question_scope=eq.subjective&select=id,question_ids',
     token
   );
   if (!Array.isArray(rows) || !rows[0] || !Array.isArray(rows[0].question_ids) ||
@@ -250,6 +270,7 @@ async function getOrCreateThread(config, token, userId, questionId, requestedThr
       '/rest/v1/tax_ai_threads?id=eq.' + encodeURIComponent(requestedThreadId) +
         '&user_id=eq.' + encodeURIComponent(userId) +
         '&question_id=eq.' + encodeURIComponent(questionId) +
+        '&workspace_id=eq.' + encodeURIComponent(config.workspace.id) +
         '&select=id',
       token
     );
@@ -263,7 +284,7 @@ async function getOrCreateThread(config, token, userId, questionId, requestedThr
     {
       method: 'POST',
       prefer: 'return=representation',
-      body: { user_id: userId, question_id: questionId }
+      body: { user_id: userId, workspace_id: config.workspace.id, question_id: questionId }
     }
   );
   if (!Array.isArray(created) || !created[0]) throw new Error('AI thread could not be created.');
@@ -303,6 +324,7 @@ function buildPrompt(question, selectedAnswer, history, currentMessage) {
     .join('\n\n');
 
   return [
+    '【备考空间】', question.studyContext || '', '',
     '【原题，不可修改】',
     question.stem,
     '',
@@ -331,7 +353,7 @@ function buildPrompt(question, selectedAnswer, history, currentMessage) {
 
 function getInstructions() {
   return [
-    '你是 CPA 税法题目的辅助讲解助手。',
+    '你是当前备考空间题目的辅助讲解助手。请按上下文中的考试、科目和题库版本讲解。',
     '只能围绕提供的当前题目回答，不得修改、覆盖或重新编造原题答案和原解析。',
     '如发现原题信息可能矛盾，明确指出需要人工核对，不要擅自改答案。',
     '每次回答严格使用以下三个标题：',
@@ -346,6 +368,7 @@ function getInstructions() {
 
 function buildGradingPrompt(question, answerText) {
   return [
+    '【备考空间】', question.studyContext || '', '',
     '【原题，不可修改】',
     question.stem,
     '',
@@ -361,7 +384,7 @@ function buildGradingPrompt(question, answerText) {
 
 function getGradingInstructions() {
   return [
-    '你是 CPA 税法主观题辅助批改助手。',
+    '你是当前备考空间主观题的辅助批改助手。',
     '只能依据提供的原题、用户作答和原书答案及解析评分。',
     '不得修改原题、原书答案或原解析，不得把AI意见冒充官方结论。',
     '分数范围为0到100，反馈必须具体、简洁、可复核。',
@@ -592,6 +615,7 @@ module.exports = async function handler(req, res) {
     }
 
     const user = await verifyUser(config, token);
+    await verifyWorkspace(config, token, user.id, String(body.workspaceId || ''));
     const context = await getQuestionAndAttempt(config, token, user.id, questionId);
     if (action === 'grade') {
       return await handleSubjectiveGrade(req, res, config, token, user, context, body);
@@ -666,6 +690,9 @@ module.exports = async function handler(req, res) {
     if (error instanceof SyntaxError) {
       status = 400;
       clientMessage = '请求内容格式错误。';
+    } else if (error.code === 'workspace_invalid') {
+      status = error.status || 403;
+      clientMessage = '当前备考空间或题目不可用，请返回题库重新选择。';
     } else if (error.code === 'openai_not_configured') {
       status = 503;
       clientMessage = 'AI服务尚未完成配置，请联系管理员。';

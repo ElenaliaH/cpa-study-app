@@ -45,6 +45,8 @@ var TaxPractice = (function () {
   }
 
   function bindEvents() {
+    byId('practiceBankSelect').addEventListener('change', function () { TaxPracticeData.selectBank(this.value); });
+    byId('practiceSubjectSelect').addEventListener('change', function () { TaxPracticeData.selectSubject(this.value).catch(showError); });
     var refresh = byId('taxRefreshBtn');
     if (refresh) refresh.addEventListener('click', loadHome);
 
@@ -223,13 +225,32 @@ var TaxPractice = (function () {
   }
 
   function loadHome() {
+    byId('practiceWorkspaceLabel').textContent = WorkspaceLogic.label(Workspaces.getCurrent());
     setStatus('正在同步题库和练习进度...', 'loading');
     byId('taxChapterList').innerHTML = '<div class="tax-loading">正在加载题库...</div>';
 
-    Promise.all([
-      TaxPracticeData.loadDashboard(),
-      TaxPracticeData.getLatestSession()
-    ]).then(function (values) {
+    TaxPracticeData.prepareWorkspace().then(function (banks) {
+      var subjects = byId('practiceSubjectSelect');
+      subjects.replaceChildren();
+      WorkspaceLogic.subjectsFor(Workspaces.getCurrent().exam_type).forEach(function (subject) {
+        var option = document.createElement('option'); option.value = subject.code; option.textContent = subject.name;
+        option.selected = subject.code === TaxPracticeData.getSubjectCode(); subjects.appendChild(option);
+      });
+      var picker = byId('practiceBankSelect');
+      picker.replaceChildren();
+      banks.forEach(function (bank) {
+        var option = document.createElement('option');
+        option.value = bank.id;
+        option.textContent = bank.subject + ' · ' + bank.edition_year + ' · ' + bank.title;
+        option.selected = bank.id === TaxPracticeData.getBankId();
+        picker.appendChild(option);
+      });
+      picker.disabled = !banks.length;
+      if (!banks.length) {
+        var empty = document.createElement('option'); empty.textContent = '暂无题库'; picker.appendChild(empty);
+      }
+      return Promise.all([TaxPracticeData.loadDashboard(), TaxPracticeData.getLatestSession()]);
+    }).then(function (values) {
       dashboard = values[0];
       latestSession = values[1];
       renderDashboard();
@@ -240,6 +261,13 @@ var TaxPractice = (function () {
       byId('taxChapterList').innerHTML = '';
       setStatus(error.message || '税法题库加载失败。', 'error');
     });
+  }
+
+  function renderEmptyBank() {
+    var subjects = WorkspaceLogic.subjectsFor(Workspaces.getCurrent().exam_type);
+    var subject = subjects.find(function (item) { return item.code === TaxPracticeData.getSubjectCode(); });
+    byId('taxChapterList').innerHTML = '<div class="task-empty"></div>';
+    byId('taxChapterList').firstChild.textContent = (subject ? subject.name + ' · ' : '') + '暂无题库，等待上传题库资料';
   }
 
   function renderDashboard() {
@@ -288,6 +316,7 @@ var TaxPractice = (function () {
         '</div>';
     }
     byId('taxChapterList').innerHTML = html || '<div class="tax-empty">暂无已发布章节。</div>';
+    if (!dashboard.chapters.length) renderEmptyBank();
     byId('taxScopeSummary').textContent = '当前显示' + scopeLabel + ' · 已完成 ' +
       selectedAnswered + ' / ' + selectedTotal;
 
@@ -543,6 +572,7 @@ var TaxPractice = (function () {
           body: JSON.stringify({
             action: 'grade',
             sessionId: session.id,
+            workspaceId: Workspaces.getCurrent().id,
             questionId: question.id,
             answerText: answerText
           })
@@ -1196,6 +1226,7 @@ var TaxPractice = (function () {
           signal: requestController ? requestController.signal : undefined,
           body: JSON.stringify({
             action: 'ask',
+            workspaceId: Workspaces.getCurrent().id,
             questionId: question.id,
             selectedAnswer: attempt ? TaxPracticeLogic.normalizeAnswer(attempt.selected_answer) : [],
             message: message,

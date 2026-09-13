@@ -18,6 +18,12 @@ var Countdown = (function () {
     var exam = new Date(Store.getExamDate() + 'T00:00:00');
     var diff = exam.getTime() - now.getTime();
 
+    if (!Number.isFinite(diff)) {
+      [els.heroDays, els.cdDays, els.cdHours, els.cdMinutes, els.cdSeconds].forEach(function (el) { el.textContent = '--'; });
+      els.phaseText.textContent = '考试日期待设置';
+      return;
+    }
+
     if (diff <= 0) {
       els.heroDays.textContent  = '0';
       els.cdDays.textContent    = '0';

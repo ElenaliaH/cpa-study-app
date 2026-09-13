@@ -9,7 +9,9 @@ var App = (function () {
   var started = false;
 
   function switchTab(tabName) {
+    if (['tasks', 'plan', 'tax'].indexOf(tabName) < 0) tabName = 'tasks';
     activeTab = tabName;
+    sessionStorage.setItem('study:active-view', tabName);
 
     var tabs = document.querySelectorAll('.nav-tab');
     for (var i = 0; i < tabs.length; i++) {
@@ -56,12 +58,13 @@ var App = (function () {
     if (overlay) overlay.style.display = 'none';
 
     bindTabs();
+    Workspaces.initUI();
     Countdown.init();
     Tasks.init();
-    switchTab('tasks');
     if (typeof Subjects !== 'undefined') Subjects.init();
     if (typeof Focus !== 'undefined') Focus.init();
     if (typeof TaxPractice !== 'undefined') TaxPractice.init();
+    switchTab(sessionStorage.getItem('study:active-view') || 'tasks');
 
     var navTop = document.querySelector('.nav-top');
     if (navTop) {
@@ -81,7 +84,8 @@ var App = (function () {
   function init() {
     SupabaseStorage.refreshSession(function () {
       if (SupabaseStorage.isLoggedIn()) {
-        SupabaseStorage.loadAppData(function (data) {
+        SupabaseStorage.loadAppData(function (data, error) {
+          if (error) { showLoadError(error); return; }
           SupabaseStorage.applyDataToStore(data);
           startApp();
         });
@@ -93,11 +97,33 @@ var App = (function () {
   }
 
   window.afterLogin = function () {
-    SupabaseStorage.loadAppData(function (data) {
+    SupabaseStorage.loadAppData(function (data, error) {
+      if (error) { showLoadError(error); return; }
       SupabaseStorage.applyDataToStore(data);
       startApp();
     });
   };
+
+  function showLoadError(error) {
+    document.getElementById('loginOverlay').style.display = 'flex';
+    var message = document.getElementById('loginMsg');
+    message.textContent = error.message || '备考空间加载失败，请稍后重试';
+    message.style.display = 'block';
+    if ((location.hostname === 'localhost' || location.hostname === '127.0.0.1') && !document.getElementById('workspaceLocalPreview')) {
+      var preview = document.createElement('a');
+      preview.id = 'workspaceLocalPreview';
+      preview.className = 'btn btn-sm btn-primary';
+      preview.href = '/?taxDemo=1&workspacePreview=1';
+      preview.textContent = '打开本地演示预览';
+      message.after(preview);
+    }
+    if (!document.getElementById('workspaceReload')) {
+      var button = document.createElement('button');
+      button.id = 'workspaceReload'; button.className = 'btn btn-sm btn-primary'; button.textContent = '重新加载';
+      button.onclick = function () { location.reload(); };
+      message.after(button);
+    }
+  }
 
   return { init: init, switchTab: switchTab };
 })();

@@ -22,11 +22,15 @@ class MockResponse {
 
 const calls = [];
 let questionMode = 'objective';
+const workspaceId = '55555555-5555-5555-5555-555555555555';
+let allowWorkspace = true, allowBank = true;
 global.fetch = async function (url, options) {
   calls.push({ url, options });
   if (url.endsWith('/auth/v1/user')) {
     return new MockResponse(200, { id: 'user-1' });
   }
+  if (url.includes('/study_workspaces?')) return new MockResponse(200, allowWorkspace ? [{ id: workspaceId, exam_type: 'cpa', year: 2027 }] : []);
+  if (url.includes('/practice_banks?')) return new MockResponse(200, allowBank ? [{ id: 'cpa-tax-2026-wang', subject: '税法', edition_year: 2026 }] : []);
   if (url.includes('/rpc/consume_tax_ai_quota')) {
     return new MockResponse(200, [{ allowed: true, remaining: 19, retry_after_seconds: 0, reason: 'ok' }]);
   }
@@ -34,6 +38,7 @@ global.fetch = async function (url, options) {
     if (questionMode === 'subjective') {
       return new MockResponse(200, [{
         id: 'tax-topic-01-subjective-p00027',
+        bank_id: 'cpa-tax-2026-wang',
         question_type: 'calculation',
         stem: '测试主观题干',
         options: [],
@@ -44,6 +49,7 @@ global.fetch = async function (url, options) {
     }
     return new MockResponse(200, [{
       id: 'tax-topic-01-p00064',
+      bank_id: 'cpa-tax-2026-wang',
       question_type: 'single_choice',
       stem: '测试题干',
       options: [{ label: 'A', text: '选项A' }, { label: 'B', text: '选项B' }],
@@ -148,6 +154,7 @@ function createResponse() {
     },
     body: {
       questionId: 'tax-topic-01-p00064',
+      workspaceId,
       message: '为什么A错误？',
       threadId: ''
     }
@@ -179,6 +186,7 @@ function createResponse() {
     headers: req.headers,
     body: {
       questionId: 'tax-topic-01-subjective-p00027',
+      workspaceId,
       message: '请解释计算步骤。',
       threadId: ''
     }
@@ -200,6 +208,7 @@ function createResponse() {
     headers: req.headers,
     body: {
       action: 'grade',
+      workspaceId,
       sessionId: '22222222-2222-2222-2222-222222222222',
       questionId: 'tax-topic-01-subjective-p00027',
       answerText: '测试主观题作答内容，包含判断依据、计算过程和最终结论。'
@@ -238,6 +247,21 @@ function createResponse() {
   assert.strictEqual(unauthenticatedRes.statusCode, 401);
   assert.strictEqual(unauthenticatedRes.body.error, '请先登录。');
   process.env.OPENAI_API_KEY = openAiKey;
+
+  allowWorkspace = false;
+  calls.length = 0;
+  const wrongWorkspace = createResponse();
+  await handler(req, wrongWorkspace);
+  assert.equal(wrongWorkspace.statusCode, 403);
+  assert.ok(!calls.some(call => call.url.includes('/consume_tax_ai_quota') || call.url.includes('api.openai.com')));
+  allowWorkspace = true;
+  allowBank = false;
+  calls.length = 0;
+  const wrongBank = createResponse();
+  await handler(req, wrongBank);
+  assert.equal(wrongBank.statusCode, 403);
+  assert.ok(!calls.some(call => call.url.includes('api.openai.com')));
+  allowBank = true;
 
   process.stdout.write('PASS AI endpoint verifies context, grades subjective answers, and keeps secrets server-side\n');
 })().catch(function (error) {

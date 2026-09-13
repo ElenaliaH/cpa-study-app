@@ -10,6 +10,42 @@ var TaxPracticeData = (function () {
     'wang-tingxi-word-v2-subjective-table-20260826'
   ];
 
+  var activeBank = null;
+  var availableBanks = [];
+  var activeSubject = null;
+  function workspaceScope() {
+    var current = Workspaces.getCurrent();
+    if (!current) throw new Error('备考空间尚未加载');
+    return current;
+  }
+  function prepareWorkspace() {
+    getUser();
+    return supabaseClient.from('practice_banks').select('id,exam_type,subject,subject_code,edition_year,title,source_versions')
+      .eq('exam_type', workspaceScope().exam_type).eq('status', 'published').order('edition_year', { ascending: false })
+      .then(function (result) {
+        var allBanks = unwrap(result, '题库目录加载失败') || [];
+        var chosen = WorkspaceLogic.practiceSelection(workspaceScope().exam_type, allBanks, localStorage.getItem(Workspaces.key('practiceSubject')));
+        chosen = WorkspaceLogic.practiceSelection(workspaceScope().exam_type, allBanks, chosen.subject, localStorage.getItem(Workspaces.key('bank:' + chosen.subject)));
+        activeSubject = chosen.subject;
+        availableBanks = chosen.banks;
+        activeBank = chosen.bank;
+        ACTIVE_BANK_SOURCE_VERSIONS = activeBank ? activeBank.source_versions : [];
+        return availableBanks;
+      });
+  }
+  function getBankId() { return activeBank ? activeBank.id : ''; }
+  function getSubjectCode() { return activeSubject; }
+  function selectSubject(code) {
+    if (!WorkspaceLogic.subjectsFor(workspaceScope().exam_type).some(function (subject) { return subject.code === code; })) return Promise.resolve();
+    localStorage.setItem(Workspaces.key('practiceSubject'), code);
+    return Workspaces.flush().then(function () { location.reload(); });
+  }
+  function selectBank(id) {
+    if (!availableBanks.some(function (bank) { return bank.id === id; })) return;
+    localStorage.setItem(Workspaces.key('bank:' + activeSubject), id);
+    return Workspaces.flush().then(function () { location.reload(); });
+  }
+
   function getUser() {
     var user = SupabaseStorage.getCurrentUser();
     if (!user) throw new Error('请先登录后再使用税法刷题。');
@@ -29,9 +65,11 @@ var TaxPracticeData = (function () {
 
   function listChapters() {
     getUser();
+    if (!activeBank) return Promise.resolve([]);
     return supabaseClient
       .from('tax_chapters')
       .select('id,order_no,title,question_count,objective_question_count,subjective_question_count')
+      .eq('bank_id', getBankId())
       .eq('is_published', true)
       .order('order_no')
       .then(function (result) {
@@ -43,8 +81,10 @@ var TaxPracticeData = (function () {
     var user = getUser();
     return supabaseClient
       .from('tax_question_user_state')
-      .select('question_id,correct_count,wrong_count,is_favorite,is_in_wrong_book,note,tax_questions(chapter_id)')
+      .select('question_id,correct_count,wrong_count,is_favorite,is_in_wrong_book,note,tax_questions!inner(chapter_id,bank_id)')
+      .eq('tax_questions.bank_id', getBankId())
       .eq('user_id', user.id)
+      .eq('workspace_id', workspaceScope().id)
       .then(function (result) {
         var rows = unwrap(result, '练习统计加载失败') || [];
         return rows.map(function (row) {
@@ -59,8 +99,10 @@ var TaxPracticeData = (function () {
     var user = getUser();
     return supabaseClient
       .from('tax_subjective_reviews')
-      .select('question_id,tax_questions(chapter_id)')
+      .select('question_id,tax_questions!inner(chapter_id,bank_id)')
+      .eq('tax_questions.bank_id', getBankId())
       .eq('user_id', user.id)
+      .eq('workspace_id', workspaceScope().id)
       .then(function (result) {
         var rows = unwrap(result, '主观题进度加载失败') || [];
         return rows.map(function (row) {
@@ -76,7 +118,9 @@ var TaxPracticeData = (function () {
     return supabaseClient
       .from('tax_practice_sessions')
       .select('id,chapter_id,mode,question_scope,question_ids,current_index,answered_count,correct_count,status,last_active_at')
+      .eq('bank_id', getBankId())
       .eq('user_id', user.id)
+      .eq('workspace_id', workspaceScope().id)
       .order('last_active_at', { ascending: false })
       .limit(200)
       .then(function (result) {
@@ -99,11 +143,14 @@ var TaxPracticeData = (function () {
 
   function getLatestSession() {
     var user = getUser();
+    if (!activeBank) return Promise.resolve(null);
     return supabaseClient
       .from('tax_practice_sessions')
       .select('*')
       .eq('user_id', user.id)
+      .eq('workspace_id', workspaceScope().id)
       .eq('status', 'active')
+      .eq('bank_id', getBankId())
       .order('last_active_at', { ascending: false })
       .limit(1)
       .maybeSingle()
@@ -120,6 +167,7 @@ var TaxPracticeData = (function () {
     return supabaseClient
       .from('tax_questions')
       .select('id,sequence_no')
+      .eq('bank_id', getBankId())
       .eq('chapter_id', chapterId)
       .eq('is_published', true)
       .in('source_version', ACTIVE_BANK_SOURCE_VERSIONS)
@@ -136,7 +184,9 @@ var TaxPracticeData = (function () {
       .from('tax_practice_sessions')
       .select('*')
       .eq('user_id', user.id)
+      .eq('workspace_id', workspaceScope().id)
       .eq('chapter_id', chapterId)
+      .eq('bank_id', getBankId())
       .eq('question_scope', scope)
       .order('last_active_at', { ascending: false })
       .limit(1)
@@ -147,11 +197,14 @@ var TaxPracticeData = (function () {
   }
 
   function insertSession(questionIds, chapterId, mode, scope) {
+    Workspaces.assertWritable();
     var user = getUser();
     return supabaseClient
       .from('tax_practice_sessions')
       .insert({
         user_id: user.id,
+        workspace_id: workspaceScope().id,
+        bank_id: getBankId(),
         chapter_id: chapterId || null,
         mode: mode,
         question_scope: scope || 'mixed',
@@ -175,6 +228,7 @@ var TaxPracticeData = (function () {
   }
 
   function resetChapterSession(chapterId, mode, scope) {
+    Workspaces.assertWritable();
     var user = getUser();
     return supabaseClient
       .from('tax_practice_sessions')
@@ -184,7 +238,9 @@ var TaxPracticeData = (function () {
         last_active_at: new Date().toISOString()
       })
       .eq('user_id', user.id)
+      .eq('workspace_id', workspaceScope().id)
       .eq('chapter_id', chapterId)
+      .eq('bank_id', getBankId())
       .eq('question_scope', scope)
       .eq('status', 'active')
       .then(function (result) {
@@ -207,6 +263,8 @@ var TaxPracticeData = (function () {
       .select('*')
       .eq('id', sessionId)
       .eq('user_id', user.id)
+      .eq('workspace_id', workspaceScope().id)
+      .eq('bank_id', getBankId())
       .single()
       .then(function (result) {
         return unwrap(result, '练习会话加载失败');
@@ -219,6 +277,7 @@ var TaxPracticeData = (function () {
     return supabaseClient
       .from('tax_questions')
       .select('id,chapter_id,sequence_no,question_type,source_label,stem,options,correct_answer,answer_raw,explanation')
+      .eq('bank_id', getBankId())
       .in('id', questionIds)
       .eq('is_published', true)
       .then(function (result) {
@@ -236,6 +295,7 @@ var TaxPracticeData = (function () {
       .select('id,question_id,selected_answer,is_correct,answered_at')
       .eq('session_id', sessionId)
       .eq('user_id', user.id)
+      .eq('workspace_id', workspaceScope().id)
       .then(function (result) {
         return unwrap(result, '答题记录加载失败') || [];
       });
@@ -248,6 +308,7 @@ var TaxPracticeData = (function () {
       .select('id,question_id,viewed_at')
       .eq('session_id', sessionId)
       .eq('user_id', user.id)
+      .eq('workspace_id', workspaceScope().id)
       .then(function (result) {
         return unwrap(result, '主观题完成记录加载失败') || [];
       });
@@ -260,12 +321,14 @@ var TaxPracticeData = (function () {
       .select('id,question_id,answer_text,status,ai_score,ai_feedback,ai_model,submitted_at,graded_at')
       .eq('session_id', sessionId)
       .eq('user_id', user.id)
+      .eq('workspace_id', workspaceScope().id)
       .then(function (result) {
         return unwrap(result, '主观题作答加载失败') || [];
       });
   }
 
   function saveSubjectiveAnswer(sessionId, questionId, answerText) {
+    Workspaces.assertWritable();
     getUser();
     return supabaseClient
       .rpc('save_tax_subjective_answer', {
@@ -280,12 +343,15 @@ var TaxPracticeData = (function () {
   }
 
   function saveProgress(sessionId, index) {
+    if (Workspaces.isReadOnly()) return Promise.resolve(true);
     var user = getUser();
     return supabaseClient
       .from('tax_practice_sessions')
       .update({ current_index: Math.max(0, index), last_active_at: new Date().toISOString() })
       .eq('id', sessionId)
       .eq('user_id', user.id)
+      .eq('workspace_id', workspaceScope().id)
+      .eq('bank_id', getBankId())
       .then(function (result) {
         unwrap(result, '练习进度保存失败');
         return true;
@@ -293,6 +359,7 @@ var TaxPracticeData = (function () {
   }
 
   function updateSessionQuestions(sessionId, questionIds, index, answeredCount, correctCount) {
+    Workspaces.assertWritable();
     var user = getUser();
     var ids = (questionIds || []).slice(0, 200);
     return supabaseClient
@@ -306,6 +373,8 @@ var TaxPracticeData = (function () {
       })
       .eq('id', sessionId)
       .eq('user_id', user.id)
+      .eq('workspace_id', workspaceScope().id)
+      .eq('bank_id', getBankId())
       .then(function (result) {
         unwrap(result, '练习题目列表保存失败');
         return true;
@@ -313,6 +382,7 @@ var TaxPracticeData = (function () {
   }
 
   function completeSession(sessionId) {
+    if (Workspaces.isReadOnly()) return Promise.resolve(true);
     var user = getUser();
     return supabaseClient
       .from('tax_practice_sessions')
@@ -323,6 +393,8 @@ var TaxPracticeData = (function () {
       })
       .eq('id', sessionId)
       .eq('user_id', user.id)
+      .eq('workspace_id', workspaceScope().id)
+      .eq('bank_id', getBankId())
       .then(function (result) {
         unwrap(result, '练习结束状态保存失败');
         return true;
@@ -330,6 +402,7 @@ var TaxPracticeData = (function () {
   }
 
   function recordAnswer(sessionId, questionId, selectedAnswer, durationSeconds) {
+    Workspaces.assertWritable();
     getUser();
     return supabaseClient
       .rpc('record_tax_answer', {
@@ -345,6 +418,7 @@ var TaxPracticeData = (function () {
   }
 
   function recordSubjectiveReview(sessionId, questionId) {
+    Workspaces.assertWritable();
     getUser();
     return supabaseClient
       .rpc('record_tax_subjective_review', {
@@ -358,6 +432,7 @@ var TaxPracticeData = (function () {
   }
 
   function refreshSessionCounts(sessionId) {
+    if (Workspaces.isReadOnly()) return Promise.resolve(null);
     getUser();
     return supabaseClient
       .rpc('refresh_tax_session_counts', { p_session_id: sessionId })
@@ -373,6 +448,7 @@ var TaxPracticeData = (function () {
       .from('tax_question_user_state')
       .select('*')
       .eq('user_id', user.id)
+      .eq('workspace_id', workspaceScope().id)
       .eq('question_id', questionId)
       .maybeSingle()
       .then(function (result) {
@@ -381,9 +457,11 @@ var TaxPracticeData = (function () {
   }
 
   function updateQuestionPreferences(questionId, favorite, note, clearWrong) {
+    Workspaces.assertWritable();
     getUser();
     return supabaseClient
-      .rpc('update_tax_question_preferences', {
+      .rpc('update_study_question_preferences', {
+        p_workspace_id: workspaceScope().id,
         p_question_id: questionId,
         p_is_favorite: favorite,
         p_note: note,
@@ -416,8 +494,10 @@ var TaxPracticeData = (function () {
     var user = getUser();
     var query = supabaseClient
       .from('tax_question_user_state')
-      .select('question_id,note,wrong_count,correct_count,last_is_correct,updated_at')
+      .select('question_id,note,wrong_count,correct_count,last_is_correct,updated_at,tax_questions!inner(bank_id)')
+      .eq('tax_questions.bank_id', getBankId())
       .eq('user_id', user.id)
+      .eq('workspace_id', workspaceScope().id)
       .order('updated_at', { ascending: false })
       .limit(200);
 
@@ -444,6 +524,7 @@ var TaxPracticeData = (function () {
       .from('tax_ai_threads')
       .select('id')
       .eq('user_id', user.id)
+      .eq('workspace_id', workspaceScope().id)
       .eq('question_id', questionId)
       .order('updated_at', { ascending: false })
       .limit(1)
@@ -486,6 +567,11 @@ var TaxPracticeData = (function () {
   }
 
   return {
+    prepareWorkspace: prepareWorkspace,
+    getSubjectCode: getSubjectCode,
+    selectSubject: selectSubject,
+    getBankId: getBankId,
+    selectBank: selectBank,
     loadDashboard: loadDashboard,
     getLatestSession: getLatestSession,
     getLatestChapterSession: getLatestChapterSession,

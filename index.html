@@ -14,7 +14,7 @@
   <link rel="apple-touch-icon" href="icon.svg">
   <link rel="icon" href="icon.svg">
 
-  <link rel="stylesheet" href="css/style.css?v=20260829a">
+  <link rel="stylesheet" href="css/style.css?v=20260912w">
 
   <!-- Supabase SDK（本地构建） -->
   <script src="js/vendor/supabase.js"></script>
@@ -49,12 +49,57 @@
     <div class="nav-tabs">
       <button class="nav-tab active" data-tab="tasks">首页</button>
       <button class="nav-tab" data-tab="plan">学习计划</button>
-      <button class="nav-tab" data-tab="tax">税法刷题</button>
+      <button class="nav-tab" data-tab="tax">题库练习</button>
     </div>
   </nav>
 
   <!-- ====== 页面内容 ====== -->
   <main class="container">
+
+    <section class="workspace-toolbar" aria-label="备考空间">
+      <p id="workspacePreviewNotice" hidden>本地演示 · 不连接正式学习数据</p>
+      <div class="workspace-selectors">
+        <button type="button" class="workspace-switch-button" id="workspaceSwitchButton" aria-haspopup="dialog" aria-controls="workspaceSwitchDialog">
+          <span id="workspaceLabel"></span><span aria-hidden="true">⌄</span>
+        </button>
+        <button type="button" class="btn btn-sm btn-ghost" id="workspaceNew">新增年度</button>
+        <button type="button" class="btn btn-sm btn-ghost" id="workspaceArchive">归档年度</button>
+      </div>
+      <div class="workspace-sync-row">
+        <span id="workspaceSyncStatus" role="status" aria-live="polite"></span>
+        <button type="button" class="btn btn-sm btn-ghost" id="workspaceRetry">同步</button>
+        <span id="workspaceReadonly" hidden>已归档 · 只读</span>
+      </div>
+      <div id="workspaceConflictActions" hidden>
+        <button type="button" class="btn btn-sm btn-ghost" id="workspaceRecovery">导出恢复副本</button>
+        <button type="button" class="btn btn-sm btn-ghost" id="workspaceUseCloud">使用云端版本</button>
+        <button type="button" class="btn btn-sm btn-ghost" id="workspaceUseLocal">使用本机版本</button>
+      </div>
+    </section>
+
+    <dialog id="workspaceSwitchDialog" class="workspace-dialog workspace-switch-dialog" aria-labelledby="workspaceSwitchTitle">
+      <div class="workspace-switch-header">
+        <h2 id="workspaceSwitchTitle">切换备考空间</h2>
+        <button type="button" class="tax-icon-button" id="workspaceSwitchClose" aria-label="关闭空间切换">×</button>
+      </div>
+      <div id="workspaceSwitchChoices"></div>
+      <p id="workspaceSwitchError" role="alert"></p>
+    </dialog>
+
+    <dialog id="workspaceCreateDialog" class="workspace-dialog">
+      <form id="workspaceCreateForm">
+        <h2>新增备考年度</h2>
+        <label>考试<select id="workspaceCreateExam"></select></label>
+        <label>年度<input id="workspaceCreateYear" type="number" min="2000" max="2100" required></label>
+        <label>考试日期<input id="workspaceCreateDate" type="date"></label>
+        <label class="workspace-checkbox"><input id="workspaceCopyTemplate" type="checkbox">复制当前科目与轮次模板</label>
+        <p id="workspaceCreateError" role="alert"></p>
+        <div class="modal-btns">
+          <button type="button" class="btn btn-ghost" id="workspaceCreateCancel">取消</button>
+          <button type="submit" class="btn btn-primary" id="workspaceCreateSave">创建</button>
+        </div>
+      </form>
+    </dialog>
 
     <!-- ──────────── 页面1：今日任务 ──────────── -->
     <section class="page" data-page="tasks">
@@ -225,7 +270,7 @@
     <section class="page tax-page" data-page="tax">
       <div class="tax-page-header">
         <div>
-          <p class="tax-eyebrow">CPA 税法</p>
+          <p class="tax-eyebrow" id="practiceWorkspaceLabel">题库练习</p>
           <h1 class="tax-page-title">章节刷题</h1>
         </div>
         <button class="btn btn-sm btn-ghost" id="taxRefreshBtn" type="button" title="刷新题库数据">刷新</button>
@@ -234,6 +279,12 @@
       <div class="tax-status" id="taxStatus" role="status" style="display:none;"></div>
 
       <div class="tax-view" id="taxHomeView">
+        <div class="workspace-bank-picker">
+          <label for="practiceSubjectSelect">科目</label>
+          <select id="practiceSubjectSelect" aria-label="选择刷题科目"></select>
+          <label for="practiceBankSelect">题库</label>
+          <select id="practiceBankSelect" aria-label="选择当前科目题库"></select>
+        </div>
         <div class="tax-overview" id="taxOverview">
           <div class="tax-metric">
             <span>已完成</span>
@@ -465,6 +516,9 @@
 
   <div class="tax-toast" id="taxToast" role="status" style="display:none;"></div>
 
+  <script src="js/workspaceLogic.js"></script>
+  <script src="js/workspaceSync.js"></script>
+  <script src="js/workspaces.js"></script>
   <script src="js/store.js"></script>
   <script src="js/supabaseClient.js"></script>
   <script src="js/supabaseStorage.js"></script>
@@ -486,6 +540,7 @@
       new URLSearchParams(location.search).get('taxDemo') === '1'
     ) {
       document.write('<script src="tests/tax-practice-demo.js?v=20260827c"><\/script>');
+      document.write('<script src="tests/workspace-demo.js?v=20260912w"><\/script>');
     }
   </script>
   <script src="js/app.js"></script>
@@ -493,7 +548,16 @@
   <!-- Service Worker -->
   <script>
     if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('sw.js');
+      if (location.hostname === 'localhost' || location.hostname === '127.0.0.1') {
+        navigator.serviceWorker.getRegistrations().then(function (registrations) {
+          var own = registrations.filter(function (registration) { return registration.scope === location.origin + '/'; });
+          return Promise.all(own.map(function (registration) { return registration.unregister(); })).then(function () {
+            if (own.length && navigator.serviceWorker.controller) location.reload();
+          });
+        });
+      } else {
+        navigator.serviceWorker.register('sw.js');
+      }
     }
   </script>
 

@@ -15,7 +15,7 @@ var Backup = (function () {
 
     var a = document.createElement('a');
     var now = new Date();
-    var filename = 'cpa-study-backup-' +
+    var filename = WorkspaceLogic.label(Workspaces.getCurrent()) + '-study-backup-' +
       now.getFullYear() + '-' +
       String(now.getMonth() + 1).padStart(2, '0') + '-' +
       String(now.getDate()).padStart(2, '0') + '.json';
@@ -29,6 +29,7 @@ var Backup = (function () {
 
   /** 导入：打开文件选择器 */
   function importData() {
+    if (Workspaces.isReadOnly()) { alert('请先恢复备考或处理同步冲突'); return; }
     var input = document.createElement('input');
     input.type = 'file';
     input.accept = '.json,application/json';
@@ -58,7 +59,7 @@ var Backup = (function () {
             '📅 导出时间：' + exportedAt + '\n' +
             '📚 科目数：' + subjectCount + '\n' +
             '✅ 手动任务数：' + taskCount + '\n\n' +
-            '导入后将覆盖当前所有数据，确定继续？',
+            '导入后仅覆盖 ' + WorkspaceLogic.label(Workspaces.getCurrent()) + ' 的计划与时长，不影响其他空间及云端刷题记录。确定继续？',
             function (ok) {
               if (!ok) return;
               var importErr = Store.importAllData(json);
@@ -67,7 +68,7 @@ var Backup = (function () {
                 return;
               }
               alert('✅ 数据导入成功！页面即将刷新。');
-              location.reload();
+              Workspaces.flush().finally(function () { location.reload(); });
             }
           );
         } catch (ex) {

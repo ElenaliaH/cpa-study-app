@@ -10,10 +10,10 @@
   var states = {};
   var aiMessages = {};
   var nativeFetch = window.fetch.bind(window);
-  var demoStateKey = 'cpa-tax-demo-state-v5';
+  var demoStateKey = null;
 
   function clearDemoState() {
-    localStorage.removeItem(demoStateKey);
+    if (demoStateKey) localStorage.removeItem(demoStateKey);
   }
 
   function loadDemoState() {
@@ -28,7 +28,9 @@
       aiMessages = saved.aiMessages || {};
       latestSession = saved.latestSessionId ? sessions[saved.latestSessionId] || null : null;
     } catch (error) {
-      clearDemoState();
+      // Do not delete malformed stored progress while opening a preview bank.
+      sessions = {}; attempts = {}; reviews = {}; subjectiveAttempts = {};
+      states = {}; aiMessages = {}; latestSession = null;
     }
   }
 
@@ -44,10 +46,36 @@
     }));
   }
 
-  loadDemoState();
+  function prepareDemoBank() {
+    var current = Workspaces.getCurrent();
+    var selection = demoSelection();
+    var bank = selection.bank;
+    var key = 'cpa-tax-demo-state-v5:' + current.id;
+    // Keep the existing CPA key so upgrading the demo retains its progress.
+    if (!bank || bank.id !== 'cpa-tax-2026-wang') key += ':' + (bank ? bank.id : selection.subject);
+    if (key !== demoStateKey) {
+      demoStateKey = key;
+      bankPromise = null;
+      loadDemoState();
+    }
+    return selection;
+  }
 
   function loadBank() {
+    var selection = prepareDemoBank();
+    if (!selection.bank) return Promise.reject(new Error('当前科目尚未导入题库。'));
     if (!bankPromise) {
+      if (selection.bank.previewFile) {
+        bankPromise = nativeFetch(selection.bank.previewFile).then(function (response) {
+          if (!response.ok) throw new Error('本地税务师题库未生成，请先运行题库转换脚本。');
+          return response.json();
+        }).then(function (bank) {
+          if (bank.metadata.bankId !== selection.bank.id || bank.metadata.subjectCode !== selection.subject ||
+              bank.metadata.examType !== 'tax_advisor') throw new Error('题库与当前科目不一致，已停止加载。');
+          return bank;
+        }).catch(function (error) { bankPromise = null; throw error; });
+        return bankPromise;
+      }
       bankPromise = Promise.all([
         nativeFetch('work/tax-bank/tax-question-bank.publishable.json?v=20260827a'),
         nativeFetch('work/tax-bank/tax-subjective-bank.publishable.json?v=20260827a')
@@ -119,12 +147,23 @@
   SupabaseStorage.refreshSession = function (callback) { callback(); };
   SupabaseStorage.isLoggedIn = function () { return true; };
   SupabaseStorage.getCurrentUser = function () { return { id: 'demo-user' }; };
-  SupabaseStorage.loadAppData = function (callback) {
-    callback(SupabaseStorage.loadLocalData() || SupabaseStorage.buildDataFromStore());
-  };
 
   TaxPracticeData = {
+    prepareWorkspace: function () {
+      return Promise.resolve(prepareDemoBank().banks);
+    },
+    getSubjectCode: function () { return demoSelection().subject; },
+    getBankId: function () { var bank = demoSelection().bank; return bank ? bank.id : ''; },
+    selectSubject: function (code) {
+      if (!WorkspaceLogic.subjectsFor(Workspaces.getCurrent().exam_type).some(function (s) { return s.code === code; })) {
+        return Promise.reject(new Error('科目不属于当前备考空间'));
+      }
+      localStorage.setItem(Workspaces.key('practiceSubject'), code);
+      return Workspaces.flush().then(function () { location.reload(); });
+    },
+    selectBank: function () { return Promise.resolve(); },
     loadDashboard: function () {
+      if (!this.getBankId()) return Promise.resolve(TaxPracticeLogic.calculateDashboard([], [], [], []));
       return loadBank().then(function (bank) {
         var chapters = bank.chapters.map(function (chapter) {
           var chapterQuestions = bank.questions.filter(function (question) {
@@ -166,7 +205,7 @@
       });
     },
     getLatestSession: function () {
-      return Promise.resolve(latestSession);
+      return Promise.resolve(this.getBankId() ? latestSession : null);
     },
     getLatestChapterSession: function (chapterId, scope) {
       var matches = Object.keys(sessions)
@@ -342,6 +381,7 @@
       return Promise.resolve(stateFor(questionId));
     },
     getCollection: function (kind) {
+      if (!this.getBankId()) return Promise.resolve([]);
       return loadBank().then(function (bank) {
         var byId = questionMap(bank);
         return Object.keys(states).filter(function (id) {
@@ -370,6 +410,21 @@
       });
     }
   };
+
+  function demoSelection() {
+    return WorkspaceLogic.practiceSelection(Workspaces.getCurrent().exam_type, [{
+      id: 'cpa-tax-2026-wang', exam_type: 'cpa', subject_code: 'tax_law',
+      subject: '税法', edition_year: 2026, title: '王亭喜核心母题'
+    }, {
+      id: 'tax-advisor-tax-law-i-550-2026', exam_type: 'tax_advisor', subject_code: 'tax_law_i',
+      subject: '税法一', edition_year: 2026, title: '必刷550题 · 税法一',
+      previewFile: 'work/tax-advisor-bank/tax-law-i.publishable.json'
+    }, {
+      id: 'tax-advisor-tax-law-ii-550-2026', exam_type: 'tax_advisor', subject_code: 'tax_law_ii',
+      subject: '税法二', edition_year: 2026, title: '必刷550题 · 税法二',
+      previewFile: 'work/tax-advisor-bank/tax-law-ii.publishable.json'
+    }], localStorage.getItem(Workspaces.key('practiceSubject')));
+  }
 
   function createSession(ids, chapterId, mode, scope) {
     var id = makeId('session');
@@ -500,7 +555,7 @@
 
   window.addEventListener('DOMContentLoaded', function () {
     setTimeout(function () {
-      App.switchTab('tax');
+      if (new URLSearchParams(location.search).get('workspacePreview') !== '1') App.switchTab('tax');
       var scenario = new URLSearchParams(location.search).get('taxScenario');
       if (!scenario) return;
       if (scenario === 'resume') {

@@ -8,3 +8,11 @@ Thumbs.db
 # Local source material and generated tax question-bank artifacts
 题库来源/
 work/tax-bank/
+work/workspace-tests/
+work/tax-advisor-review/
+work/tax-advisor-bank/
+tools/__pycache__/
+work/release/
+supabase/.temp/
+cpa题库来源/
+税务师题库/

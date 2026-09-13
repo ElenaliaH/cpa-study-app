@@ -2,10 +2,14 @@
   "name": "cpa-study-app",
   "version": "1.0.0",
   "scripts": {
+    "start": "node tools/preview.js",
+    "test:workspaces": "node tests/workspace-sync.test.js && node tests/practice-bank-scope.test.js && node tests/workspace-migration.test.js",
+    "test:workspaces:browser": "node tests/workspaces-browser.test.js",
     "build:supabase": "esbuild tools/supabase-shim.js --bundle --format=iife --outfile=js/vendor/supabase.js",
     "test": "node tests/tax-practice-logic.test.js && node tests/tax-practice-ui.test.js && node tests/tax-practice-migration.test.js && node tests/tax-existing-rpc-hardening-migration.test.js && node tests/tax-batch-subjective-migration.test.js && node tests/tax-subjective-grading-migration.test.js && node tests/tax-subjective-rpc-hardening-migration.test.js && node tests/tax-bank-output.test.js && node tests/tax-subjective-output.test.js && node tests/tax-ai-api.test.js"
   },
   "devDependencies": {
+    "@electric-sql/pglite": "0.3.14",
     "@supabase/supabase-js": "^2.110.1",
     "esbuild": "^0.28.1"
   }

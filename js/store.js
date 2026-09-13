@@ -29,15 +29,20 @@ var Store = (function () {
 
   function getItem(key, fallback) {
     try {
-      var raw = localStorage.getItem(key);
+      var raw = localStorage.getItem(Workspaces.key(key));
       if (raw === null || raw === undefined) return fallback;
       return JSON.parse(raw);
     } catch (e) { return fallback; }
   }
 
   function setItem(key, value) {
-    try { localStorage.setItem(key, JSON.stringify(value)); }
-    catch (e) { console.error('[Store] 写入失败：' + key, e); }
+    assertWritable();
+    localStorage.setItem(Workspaces.key(key), JSON.stringify(value));
+  }
+
+  function assertWritable() {
+    if (typeof SupabaseStorage !== 'undefined' && SupabaseStorage.shouldSkipUpload()) return;
+    Workspaces.assertWritable();
   }
 
   function uid(prefix) {
@@ -56,11 +61,12 @@ var Store = (function () {
   /* ========== 1. 考试日期 ========== */
 
   function getExamDate() {
-    return localStorage.getItem(KEY_EXAM_DATE) || DEFAULT_EXAM_DATE;
+    return localStorage.getItem(Workspaces.key(KEY_EXAM_DATE)) || '';
   }
 
   function setExamDate(dateStr) {
-    localStorage.setItem(KEY_EXAM_DATE, dateStr);
+    assertWritable();
+    localStorage.setItem(Workspaces.key(KEY_EXAM_DATE), dateStr);
     try { if (typeof SupabaseStorage !== 'undefined' && !SupabaseStorage.shouldSkipUpload()) SupabaseStorage.scheduleUpload(); } catch (e) {}
   }
 
@@ -331,12 +337,12 @@ var Store = (function () {
       });
     }
     // 保留旧 key 做备份，新数据写入 cpa_manual_tasks
-    var existingManual = getManualTasks();
+    var existingManual = getItem(KEY_MANUAL_TASKS, []);
     if (existingManual.length === 0) {
       setItem(KEY_MANUAL_TASKS, migrated);
     }
     // 清除旧 key（只执行一次）
-    localStorage.removeItem(KEY_TASKS);
+    localStorage.removeItem(Workspaces.key(KEY_TASKS));
   }
 
   function getManualTasks() {
@@ -502,7 +508,8 @@ var Store = (function () {
 
   function exportAllData() {
     return {
-      version: 2,
+      version: 3,
+      workspace: Workspaces.getCurrent() && { exam_type: Workspaces.getCurrent().exam_type, year: Workspaces.getCurrent().year },
       exportedAt: new Date().toISOString(),
       examDate: getExamDate(),
       subjects: getSubjects(),
@@ -515,6 +522,9 @@ var Store = (function () {
   function validateImportData(json) {
     if (!json || typeof json !== 'object') return '数据格式无效：不是有效的 JSON 对象';
     if (!json.subjects || !Array.isArray(json.subjects)) return '数据缺少 subjects 字段或格式不正确';
+    var scope = Workspaces.getCurrent();
+    if (json.workspace && (json.workspace.exam_type !== scope.exam_type || Number(json.workspace.year) !== scope.year)) return '备份的考试或年度与当前空间不同，请先切换到对应空间';
+    if (!json.workspace && scope.exam_type !== 'cpa') return '旧版 CPA 备份只能导入 CPA 空间';
     if (!json.manualTasks || !Array.isArray(json.manualTasks)) json.manualTasks = [];
     if (!json.mistakes || !Array.isArray(json.mistakes)) json.mistakes = [];
     if (!json.focus_sessions || !Array.isArray(json.focus_sessions)) json.focus_sessions = [];
@@ -525,7 +535,7 @@ var Store = (function () {
     var err = validateImportData(json);
     if (err) return err;
 
-    if (json.examDate) setExamDate(json.examDate);
+    assertWritable();
 
     // 迁移导入的旧数据
     var subjects = json.subjects || [];
@@ -543,10 +553,12 @@ var Store = (function () {
         if (!r.courseItems) r.courseItems = [];
       }
     }
-    setItem(KEY_SUBJECTS, subjects);
-    setItem(KEY_MANUAL_TASKS, json.manualTasks || []);
-    setItem(KEY_MISTAKES, json.mistakes || []);
-    setItem(KEY_FOCUS_SESSIONS, (json.focus_sessions || []).map(normalizeFocusSession));
+    var data = {
+      examDate: json.examDate || '', subjects: subjects, manualTasks: json.manualTasks || [],
+      mistakes: json.mistakes || [], focus_sessions: (json.focus_sessions || []).map(normalizeFocusSession), schemaVersion: 2
+    };
+    SupabaseStorage.saveAppData(data);
+    SupabaseStorage.applyDataToStore(data);
     return null;
   }
 

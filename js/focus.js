@@ -94,6 +94,8 @@ var Focus = (function () {
     var now = Date.now();
     var timerMode = mode === 'countup' ? 'countup' : 'countdown';
     state = {
+      workspaceId: Workspaces.getCurrent().id,
+      userId: SupabaseStorage.getCurrentUser().id,
       timerMode: timerMode,
       plannedMinutes: minutes,
       subjectId: subjectId,
@@ -272,6 +274,7 @@ var Focus = (function () {
   }
 
   function saveSession(actualMinutes, status) {
+    if (state.workspaceId !== Workspaces.getCurrent().id || state.userId !== SupabaseStorage.getCurrentUser().id) throw new Error('计时记录不属于当前空间');
     Store.addFocusSession({
       user_id: SupabaseStorage && SupabaseStorage.getCurrentUser() ? SupabaseStorage.getCurrentUser().id : '',
       date: Store.today(),
@@ -342,7 +345,10 @@ var Focus = (function () {
   function persistActiveTimer() {
     if (!state) return;
     try {
-      localStorage.setItem(ACTIVE_TIMER_KEY, JSON.stringify({
+      localStorage.setItem(Workspaces.key(ACTIVE_TIMER_KEY), JSON.stringify({
+        workspaceId: state.workspaceId,
+        userId: state.userId,
+        finishing: !!state.finishing,
         timerMode: state.timerMode,
         plannedMinutes: state.plannedMinutes,
         subjectId: state.subjectId,
@@ -357,16 +363,19 @@ var Focus = (function () {
   }
 
   function clearActiveTimer() {
-    try { localStorage.removeItem(ACTIVE_TIMER_KEY); } catch (e) {}
+    try { localStorage.removeItem(Workspaces.key(ACTIVE_TIMER_KEY)); } catch (e) {}
   }
 
   function restoreActiveTimer() {
     if (state) return;
     var raw = null;
-    try { raw = localStorage.getItem(ACTIVE_TIMER_KEY); } catch (e) { raw = null; }
+    try { raw = localStorage.getItem(Workspaces.key(ACTIVE_TIMER_KEY)); } catch (e) { raw = null; }
     if (!raw) return;
     try { state = JSON.parse(raw); } catch (e) { clearActiveTimer(); state = null; return; }
     if (!state || !state.subjectId || !state.startedAtMs) { clearActiveTimer(); state = null; return; }
+    if (state.workspaceId !== Workspaces.getCurrent().id || state.userId !== SupabaseStorage.getCurrentUser().id) { state = null; return; }
+    var wasFinishing = state.finishing;
+    state.finishing = false;
     state.startedAt = new Date(state.startedAtMs);
     state.timerMode = state.timerMode === 'countup' ? 'countup' : 'countdown';
     state.durationSeconds = state.durationSeconds || (state.plannedMinutes || 0) * 60;
@@ -376,7 +385,7 @@ var Focus = (function () {
     syncTimerFromClock();
     renderTimer();
     startTicker();
-    if (state.timerMode !== 'countup' && state.remainingSeconds <= 0) setTimeout(finishFlow, 0);
+    if (wasFinishing || (state.timerMode !== 'countup' && state.remainingSeconds <= 0)) setTimeout(finishFlow, 0);
   }
 
   function bindLifecycle() {
@@ -470,7 +479,7 @@ var Focus = (function () {
     var subjects = Store.getSubjects();
     var examTime = new Date(Store.getExamDate() + 'T00:00:00').getTime();
     var examDays = Math.max(0, Math.floor((examTime - Date.now()) / 86400000));
-    var lines = ['CPA\u5b66\u4e60\u65e5\u62a5', '', '\u65e5\u671f\uff1a' + today, '', '\u8ddd\u79bb\u8003\u8bd5\uff1a' + examDays + '\u5929', '', '\u4eca\u65e5\u5b66\u4e60\u65f6\u95f4\uff1a'];
+    var lines = [WorkspaceLogic.label(Workspaces.getCurrent()) + '学习日报', '', '日期：' + today, '', '距离考试：' + (Number.isFinite(examDays) ? examDays + '天' : '日期待设置'), '', '今日学习时间：'];
 
     for (var i = 0; i < subjects.length; i++) {
       var stats = getSubjectFocusStats(subjects[i].id);
@@ -684,7 +693,17 @@ var Focus = (function () {
     return String(s).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
   }
 
+  function prepareWorkspaceSwitch() {
+    if (!state) return true;
+    if (state.finishing) { alert('请先保存或不计入本次学习记录'); return false; }
+    if (state.running) togglePause();
+    persistActiveTimer();
+    return true;
+  }
+
   return {
+    prepareWorkspaceSwitch: prepareWorkspaceSwitch,
+    hasActiveTimer: function () { return !!state; },
     init: init,
     getSubjectFocusStats: getSubjectFocusStats,
     editTodayFocusMinutes: editTodayFocusMinutes,
